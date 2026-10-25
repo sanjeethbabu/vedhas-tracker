@@ -456,7 +456,14 @@ export default function App() {
               const responseBody = response
                 ? await response.json().catch(() => null) as { error?: string } | null
                 : null
-              setAuthError(responseBody?.error ?? data?.error ?? 'We could not create the account. Check the ID and try again.')
+              const message = responseBody?.error ?? data?.error
+              if (message) {
+                setAuthError(message)
+              } else if (response?.status === 404 || !response) {
+                setAuthError('Employee registration is unavailable. Ask your administrator to deploy the create-employee-account function to this Supabase project.')
+              } else {
+                setAuthError('We could not create the account. Check the Supabase function logs or try again later.')
+              }
               return
             }
             if (!data?.message) {
