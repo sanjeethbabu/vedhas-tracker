@@ -53,7 +53,7 @@ function Icon({
   name,
   size = 18,
 }: {
-  name: 'users' | 'plus' | 'search' | 'logout' | 'chevron' | 'arrow' | 'edit' | 'trash' | 'close' | 'check' | 'building' | 'refresh' | 'clock' | 'sparkles' | 'eye' | 'eyeOff'
+  name: 'users' | 'plus' | 'search' | 'logout' | 'chevron' | 'arrow' | 'edit' | 'trash' | 'close' | 'check' | 'building' | 'refresh' | 'clock' | 'sparkles' | 'eye' | 'eyeOff' | 'location'
   size?: number
 }) {
   const common = {
@@ -85,6 +85,7 @@ function Icon({
     sparkles: <><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z" /><path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14Z" /></>,
     eye: <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
     eyeOff: <><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a15 15 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8" /></>,
+    location: <><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></>,
   }
 
   return <svg {...common}>{paths[name]}</svg>
@@ -1311,6 +1312,42 @@ function CustomerForm({
   onViewCustomer: () => void
 }) {
   const setField = (key: keyof FormState, value: string) => onChange({ ...form, [key]: value })
+  const [locationLoading, setLocationLoading] = useState(false)
+  const [locationMessage, setLocationMessage] = useState('')
+
+  const useCurrentLocation = () => {
+    setLocationMessage('')
+    if (!window.isSecureContext) {
+      setLocationMessage('Current location requires a secure connection (HTTPS).')
+      return
+    }
+    if (!navigator.geolocation) {
+      setLocationMessage('Location is not supported by this browser.')
+      return
+    }
+
+    setLocationLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const coordinates = `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
+        setField('location', coordinates)
+        setLocationMessage(`Coordinates added: ${coordinates}`)
+        setLocationLoading(false)
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationMessage('Location access was denied. Allow location access in your browser settings and try again.')
+        } else if (error.code === error.TIMEOUT) {
+          setLocationMessage('Could not get your location in time. Please try again.')
+        } else {
+          setLocationMessage('Your current location is unavailable. Check your device location settings and try again.')
+        }
+        setLocationLoading(false)
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    )
+  }
+
   return (
     <div className="form-page">
       <button className="back-link" onClick={onCancel}><Icon name="arrow" size={16} /> Back to customers</button>
@@ -1355,7 +1392,16 @@ function CustomerForm({
           <div className="form-grid">
             <Field label="Area"><input className="text-input" placeholder="e.g. Indiranagar" value={form.area} onChange={(event) => setField('area', event.target.value)} /></Field>
             <Field label="City"><input className="text-input" placeholder="e.g. Bengaluru" value={form.city} onChange={(event) => setField('city', event.target.value)} /></Field>
-            <Field label="Location / address" wide><input className="text-input" placeholder="Street, landmark, building…" value={form.location} onChange={(event) => setField('location', event.target.value)} /></Field>
+            <div className="form-field field-wide">
+              <span className="field-label">Location / address</span>
+              <div className="location-input-row">
+                <input className="text-input" placeholder="Street, landmark, building or coordinates…" value={form.location} onChange={(event) => setField('location', event.target.value)} />
+                <button className="button button-outline location-button" type="button" onClick={useCurrentLocation} disabled={locationLoading}>
+                  <Icon name="location" size={16} /> {locationLoading ? 'Getting location…' : 'Use current location'}
+                </button>
+              </div>
+              {locationMessage && <span className="field-hint" role="status" aria-live="polite">{locationMessage}</span>}
+            </div>
             <Field label="Remarks" wide><textarea className="text-input textarea-input" rows={4} placeholder="Add useful observations for your next visit…" value={form.remarks} onChange={(event) => setField('remarks', event.target.value)} /></Field>
           </div>
         </section>
