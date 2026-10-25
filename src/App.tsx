@@ -686,6 +686,7 @@ export default function App() {
               profile={profile}
               admin={isAdmin}
               customers={customers}
+              employees={staff}
               stats={stats}
               loading={customersLoading}
               onAdd={openAdd}
@@ -946,6 +947,7 @@ function Dashboard({
   profile,
   admin,
   customers,
+  employees,
   stats,
   loading,
   onAdd,
@@ -956,6 +958,7 @@ function Dashboard({
   profile: UserProfile
   admin: boolean
   customers: Customer[]
+  employees: UserProfile[]
   stats: { total: number; hotels: number; hospitals: number; schools: number; colleges: number; others: number }
   loading: boolean
   onAdd: () => void
@@ -963,6 +966,14 @@ function Dashboard({
   onCheckForUpdates: () => void
   onOpenCustomer: (customer: Customer) => void
 }) {
+  const customerCountsByEmployee = new Map<string, number>()
+  for (const customer of customers) {
+    customerCountsByEmployee.set(
+      customer.user_id,
+      (customerCountsByEmployee.get(customer.user_id) ?? 0) + 1,
+    )
+  }
+  const employeeRows = [...employees].sort((a, b) => a.full_name.localeCompare(b.full_name))
   const metrics = [
     { label: 'Total customers', value: stats.total, icon: 'users', tone: 'blue', note: 'Your customer list' },
     { label: 'Hotels & residency', value: stats.hotels, icon: 'building', tone: 'amber', note: 'Hospitality sector' },
@@ -994,35 +1005,47 @@ function Dashboard({
           </div>
         ))}
       </section>
-      <section className="action-row">
-        <div className="section-heading-block"><div className="eyebrow"><span /> {admin ? 'REPORTING' : 'QUICK ACTIONS'}</div><h2>{admin ? 'Review team activity' : 'What would you like to do?'}</h2></div>
-        <div className={`quick-actions ${admin ? 'quick-actions-admin' : ''}`}>
-          {!admin && <button className="quick-action primary-action" onClick={onAdd}>
-            <span className="action-icon action-icon-light"><Icon name="plus" size={19} /></span>
-            <span className="action-copy"><strong>Add a customer</strong><small>Record a new business contact</small></span>
-            <Icon name="chevron" size={17} />
-          </button>}
-          <button className="quick-action" onClick={onCustomers}>
-            <span className="action-icon action-icon-blue"><Icon name="users" size={18} /></span>
-            <span className="action-copy"><strong>{admin ? 'View all reports' : 'View my customers'}</strong><small>{admin ? 'Review every employee submission' : 'Search and manage your list'}</small></span>
-            <Icon name="chevron" size={17} />
-          </button>
-        </div>
-      </section>
-      {admin && <section className="recent-section">
+      {admin && <section className="employee-summary recent-section">
         <div className="section-title-row">
-          <div><div className="eyebrow"><span /> TEAM ACTIVITY</div><h2>Recent submissions</h2></div>
-          {customers.length > 0 && <button className="text-link" onClick={onCustomers}>View all reports <Icon name="chevron" size={15} /></button>}
+          <div>
+            <div className="eyebrow"><span /> EMPLOYEE PERFORMANCE</div>
+            <h2>Customers by employee</h2>
+            <p className="employee-summary-description">A team-wide count of customer records submitted by each employee.</p>
+          </div>
+          <span className="employee-total-badge">{employeeRows.length} {employeeRows.length === 1 ? 'employee' : 'employees'}</span>
+        </div>
+        {employeeRows.length === 0 ? (
+          <div className="employee-summary-empty">No employee accounts found.</div>
+        ) : (
+          <div className="employee-table-scroll">
+            <table className="employee-summary-table">
+              <thead><tr><th>EMPLOYEE</th><th>EMPLOYEE ID</th><th>CUSTOMERS SUBMITTED</th></tr></thead>
+              <tbody>{employeeRows.map((employee) => (
+                <tr key={employee.user_id}>
+                  <td><div className="employee-name-cell"><span className="employee-avatar">{employee.full_name.slice(0, 1).toUpperCase()}</span><strong>{employee.full_name}</strong></div></td>
+                  <td><span className="employee-id-pill">{employee.employee_id}</span></td>
+                  <td><span className="employee-customer-count">{loading ? '—' : customerCountsByEmployee.get(employee.user_id) ?? 0}</span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </section>}
+      <section className="recent-section">
+        <div className="section-title-row">
+          <div><div className="eyebrow"><span /> {admin ? 'TEAM REPORTS' : 'MY CUSTOMERS'}</div><h2>Customer / organisation name</h2></div>
+          {customers.length > 0 && <button className="text-link" onClick={onCustomers}>{admin ? 'View all reports' : 'View all customers'} <Icon name="chevron" size={15} /></button>}
         </div>
         {loading ? <div className="loading-row"><span className="button-spinner" /> Loading your customers…</div> : customers.length === 0 ? (
           <div className="empty-state compact-empty">
             <span className="empty-icon"><Icon name="users" size={23} /></span>
-            <strong>No submissions yet</strong>
-            <p>Employee customer submissions will appear here.</p>
+            <strong>{admin ? 'No submissions yet' : 'No customers yet'}</strong>
+            <p>{admin ? 'Employee customer submissions will appear here.' : 'Add your first customer to see the customer list here.'}</p>
+            {!admin && <button className="button button-soft" onClick={onAdd}><Icon name="plus" size={16} /> Add your first customer</button>}
           </div>
         ) : (
           <div className="recent-list">
-            {customers.slice(0, 5).map((customer) => (
+            {customers.map((customer) => (
               <button className="recent-item" key={customer.id} onClick={() => onOpenCustomer(customer)}>
                 <div className="customer-monogram">{customer.customer_name.slice(0, 1).toUpperCase()}</div>
                 <div className="recent-main"><strong>{customer.customer_name}</strong><span>{sectorLabel(customer)}{customer.city ? ` · ${customer.city}` : ''}</span></div>
@@ -1031,7 +1054,7 @@ function Dashboard({
             ))}
           </div>
         )}
-      </section>}
+      </section>
       <div className="dashboard-note"><span className="note-shield">✓</span><span><strong>{admin ? 'Admin reporting access' : 'Private to your account'}</strong> {admin ? 'You can view all employee submissions. Employees only see their own records.' : 'Only you and workspace admins can view your customer records.'}</span></div>
     </div>
   )

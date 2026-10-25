@@ -51,7 +51,7 @@ If you already have data from an earlier email-based deployment, do not create r
 
 ## Reports and navigation
 
-The app uses a single overview with shortcuts to add and view customer records; there is no sidebar or CSV export. Admin reports can be filtered by a custom inclusive date range using the submission date.
+The app uses a single overview with the full customer/organisation list and an Add Customer button; there are no Quick Actions cards, sidebar, or CSV export. Admin reports can be filtered by a custom inclusive date range using the submission date.
 
 ## Build
 
