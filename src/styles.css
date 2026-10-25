@@ -30,15 +30,18 @@ button:disabled { cursor: not-allowed; opacity: .65; }
   background: #fff;
   color: var(--ink);
 }
-.brand-image { display: block; object-fit: contain; }
+.brand-image {
+  display: block;
+  object-fit: contain;
+}
 .splash-logo { width: 166px; height: 166px; }
 .splash-name, .brand-title, .mobile-login-brand > span, .art-brand > span {
   font-family: 'Comic Sans MS', 'Comic Sans', cursive;
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: normal;
 }
 .splash-name { margin-top: 10px; font-size: 26px; color: #294fd0; }
-.splash-name span { color: #1c2c4c; font-weight: 400; }
+.splash-name span { color: #1c2c4c; font-weight: 500; }
 .loader-dots { display: flex; gap: 6px; margin-top: 27px; }
 .loader-dots i { width: 6px; height: 6px; border-radius: 50%; background: #3159d9; animation: pulse 1s infinite ease-in-out; }
 .loader-dots i:nth-child(2) { animation-delay: .16s; }
@@ -55,9 +58,9 @@ button:disabled { cursor: not-allowed; opacity: .65; }
 .art-glow-two { right: -20%; bottom: 0; background: #09acb1; opacity: .12; }
 .art-content { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; padding: 42px clamp(38px, 6vw, 92px) 34px; }
 .art-brand { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.login-art-logo { width: 112px; height: 124px; object-fit: contain; }
+.login-art-logo { width: 112px; height: 112px; }
 .art-brand > span { color: #fff; font-size: 21px; }
-.art-brand b { color: #a9c0ff; font-weight: 400; }
+.art-brand b { color: #a9c0ff; font-weight: 500; }
 .art-message { margin: auto 0; padding: 50px 0 90px; }
 .eyebrow { display: flex; align-items: center; gap: 9px; color: #7182a0; font-size: 10px; font-weight: 700; letter-spacing: .13em; }
 .eyebrow > span { width: 7px; height: 7px; border-radius: 50%; background: #3e67e8; box-shadow: 0 0 0 3px #3e67e81a; }
@@ -127,7 +130,7 @@ button:disabled { cursor: not-allowed; opacity: .65; }
 .sidebar-brand { display: flex; flex-direction: column; align-items: flex-start; padding: 21px 25px 23px; border-bottom: 1px solid #eff2f6; }
 .sidebar-logo { width: 103px; height: 103px; align-self: center; margin-bottom: 7px; }
 .brand-title { color: #2850cd; font-size: 19px; }
-.brand-title span { color: #172b4d; font-weight: 400; }
+.brand-title span { color: #172b4d; font-weight: 500; }
 .brand-subtitle { margin-top: 5px; color: #96a1b2; font-size: 8px; font-weight: 700; letter-spacing: .15em; }
 .side-nav { padding: 24px 13px; }
 .nav-caption { margin: 0 0 9px 13px; color: #9ba6b6; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
@@ -390,8 +393,8 @@ button:disabled { cursor: not-allowed; opacity: .65; }
   .login-art { display: none; }
   .login-panel { min-height: 100vh; justify-content: center; padding: 30px 24px; }
   .mobile-login-brand { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 0 auto 29px; color: #294fd0; font-size: 20px; }
-  .mobile-login-brand b { color: #1d2e4a; font-weight: 400; }
-  .mobile-login-logo { width: 105px; height: 116px; object-fit: contain; }
+  .mobile-login-brand b { color: #1d2e4a; font-weight: 500; }
+  .mobile-login-logo { width: 105px; height: 105px; }
   .login-form h2 { font-size: 30px; }
   .login-footer { max-width: 320px; line-height: 1.5; }
   .sidebar { z-index: 42; width: 274px; transform: translateX(-102%); transition: transform .23s ease; box-shadow: 0 0 0 transparent; }
