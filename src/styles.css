@@ -85,6 +85,11 @@ button:disabled { cursor: not-allowed; opacity: .65; }
 .text-input:focus { border-color: #6584ed; outline: none; box-shadow: 0 0 0 3px #6584ed19; }
 .password-label { display: flex; justify-content: space-between; align-items: center; margin: 21px 0 8px; }
 .password-label span { color: #a0a9b8; font-size: 10px; }
+.password-input-wrap { position: relative; }
+.password-input-wrap .text-input { padding-right: 74px; }
+.password-visibility { position: absolute; top: 50%; right: 8px; display: inline-flex; align-items: center; gap: 5px; transform: translateY(-50%); border: 0; border-radius: 5px; padding: 6px; color: #73839a; background: transparent; cursor: pointer; font-size: 10px; }
+.password-visibility:hover { color: #3159d9; background: #f3f6ff; }
+.password-visibility:focus-visible { outline: 2px solid #6584ed; outline-offset: 1px; }
 .login-submit { width: 100%; justify-content: center; margin-top: 23px; }
 .remember-control { position: relative; display: flex; align-items: center; gap: 8px; width: fit-content; margin-top: 15px; color: #607089; cursor: pointer; font-size: 11px; }
 .remember-control input { position: absolute; width: 1px; height: 1px; opacity: 0; }

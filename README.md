@@ -4,11 +4,11 @@ A mobile-first customer tracker for sales employees and read-only sales reportin
 
 ## Sign-in and roles
 
-- Employees sign in with an ID such as `emp001` and a password. They can create customer records and view, edit, export, or delete only records they submitted.
+- Employees sign in with an ID such as `vc001` and a password. They can create customer records and view, edit, or delete only records they submitted.
 - Administrators sign in with an ID such as `admin001` and a password. They can view and export all employee submissions; admin reports are read-only.
 - Role access comes from `public.profiles` and Supabase Row Level Security. The ID prefix is not itself an authorization check.
 - The login page's **Create account** flow creates employee accounts only. Admin accounts must be provisioned by the project owner.
-- Employees can create their own accounts with a unique `emp` ID. Admin IDs and roles cannot be created through public sign-up.
+- Employees can create their own accounts with a unique `vc` ID. Admin IDs and roles cannot be created through public sign-up.
 - **Remember me** keeps the Supabase session in local storage. When unchecked, it uses session storage and is cleared when the browser tab/session ends.
 
 ## Supabase setup
@@ -45,7 +45,8 @@ The local `.env` is ignored by Git. Restart Vite after changing it. For a deploy
 
 ## ID-only authentication
 
-Supabase password authentication still uses an internal synthetic email of the form `emp001@accounts.vedhas.local` or `admin001@accounts.vedhas.local`. The app derives it from the submitted ID and never asks the user for an email. Employee registration creates the Supabase Auth account and a database trigger creates its profile. Employee IDs must be unique, and the trigger always assigns the employee role; public sign-up cannot create admin profiles. Administrators are provisioned separately through Supabase Auth and the protected `profiles` table. Because these IDs are not email addresses, password recovery must be handled by an administrator resetting the user's password in Supabase Auth.
+Supabase password authentication still uses an internal synthetic email of the form `vc001@accounts.vedhas.local` or `admin001@accounts.vedhas.local`. The app derives it from the submitted ID and never asks the user for an email. Employee registration creates the Supabase Auth account and a database trigger creates its profile. New employee IDs use the `vc` prefix and must be unique; the trigger always assigns the employee role, so public sign-up cannot create admin profiles. Existing `emp` accounts can continue to sign in. Administrators are provisioned separately through Supabase Auth and the protected `profiles` table. Passwords are set by each user and must meet the password policy configured in Supabase Auth. Because these IDs are not email addresses, password recovery must be handled by an administrator resetting the user's password in Supabase Auth.
+
 
 If you already have data from an earlier email-based deployment, do not create replacement accounts until you have planned how to map the old auth UUIDs and customer rows to the new employee IDs. Existing records stay associated with their original `user_id`.
 

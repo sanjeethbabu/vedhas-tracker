@@ -14,11 +14,11 @@ create table if not exists public.profiles (
   user_id uuid primary key references auth.users (id) on delete cascade,
   employee_id text not null check (
     employee_id = lower(employee_id)
-    and employee_id ~ '^(emp|admin)[0-9]{3,}$'
+    and employee_id ~ '^(vc|admin)[0-9]{3,}$'
   ),
   full_name text not null check (length(trim(full_name)) between 2 and 120),
   role text not null check (
-    (role = 'employee' and employee_id ~ '^emp[0-9]{3,}$')
+    (role = 'employee' and employee_id ~ '^vc[0-9]{3,}$')
     or (role = 'admin' and employee_id ~ '^admin[0-9]{3,}$')
   ),
   created_at timestamptz not null default now()
@@ -89,7 +89,7 @@ begin
     raise exception 'Admin accounts cannot be created through employee sign-up.';
   end if;
 
-  if employee_id_value !~ '^emp[0-9]{3,}$'
+  if employee_id_value !~ '^vc[0-9]{3,}$'
     or length(full_name_value) < 2
     or length(full_name_value) > 120
     or new.email is distinct from (employee_id_value || '@accounts.vedhas.local')

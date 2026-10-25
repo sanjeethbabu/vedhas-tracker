@@ -32,18 +32,13 @@ Deno.serve(async (request: Request) => {
   const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : ''
   const employeeId = typeof body.employeeId === 'string' ? body.employeeId.trim().toLowerCase() : ''
   const password = typeof body.password === 'string' ? body.password : ''
-  const passwordBytes = new TextEncoder().encode(password).length
 
   if (fullName.length < 2 || fullName.length > 120) {
     return jsonResponse(400, { error: 'Enter a name between 2 and 120 characters.' })
   }
-  if (!/^emp[0-9]{3,}$/.test(employeeId)) {
-    return jsonResponse(400, { error: 'Employee IDs must use the emp001 format.' })
+  if (!/^vc[0-9]{3,}$/.test(employeeId)) {
+    return jsonResponse(400, { error: 'Employee IDs must use the vc001 format.' })
   }
-  if (password.length < 10 || passwordBytes > 72) {
-    return jsonResponse(400, { error: 'Use at least 10 characters and no more than 72 UTF-8 bytes.' })
-  }
-
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!supabaseUrl || !serviceRoleKey) {

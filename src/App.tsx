@@ -49,7 +49,7 @@ function Icon({
   name,
   size = 18,
 }: {
-  name: 'users' | 'plus' | 'search' | 'logout' | 'chevron' | 'arrow' | 'edit' | 'trash' | 'close' | 'check' | 'building' | 'refresh' | 'clock' | 'sparkles'
+  name: 'users' | 'plus' | 'search' | 'logout' | 'chevron' | 'arrow' | 'edit' | 'trash' | 'close' | 'check' | 'building' | 'refresh' | 'clock' | 'sparkles' | 'eye' | 'eyeOff'
   size?: number
 }) {
   const common = {
@@ -79,6 +79,8 @@ function Icon({
     refresh: <><path d="M20 7v5h-5M4 17v-5h5" /><path d="M5.6 9A7 7 0 0 1 17.2 5L20 7M4 17l2.8 2A7 7 0 0 0 18.4 15" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     sparkles: <><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z" /><path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14Z" /></>,
+    eye: <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
+    eyeOff: <><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a15 15 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8" /></>,
   }
 
   return <svg {...common}>{paths[name]}</svg>
@@ -221,6 +223,9 @@ export default function App() {
   }, [])
 
   const isAdmin = profile?.role === 'admin'
+  const accountDisplayName = profile
+    ? isAdmin ? 'Admin' : profile.full_name
+    : ''
 
   const refreshCustomers = useCallback(async (userId: string, admin = false) => {
     setCustomersLoading(true)
@@ -414,8 +419,8 @@ export default function App() {
             return
           }
           const id = employeeId.trim().toLowerCase()
-          if (!/^(emp|admin)[0-9]{3,}$/.test(id)) {
-            setAuthError('Enter an employee ID such as emp001 or an admin ID such as admin001.')
+          if (!/^(vc|emp|admin)[0-9]{3,}$/.test(id)) {
+            setAuthError('Enter an employee ID such as vc001 or an admin ID such as admin001.')
             return
           }
           setAuthSubmitting(true)
@@ -443,12 +448,8 @@ export default function App() {
             return
           }
           const id = employeeId.trim().toLowerCase()
-          if (!fullName.trim() || !/^emp[0-9]{3,}$/.test(id)) {
-            setAuthError('Employee accounts need your name and an ID such as emp001.')
-            return
-          }
-          if (password.length < 10 || new TextEncoder().encode(password).length > 72) {
-            setAuthError('Use a password with at least 10 characters and no more than 72 UTF-8 bytes.')
+          if (!fullName.trim() || !/^vc[0-9]{3,}$/.test(id)) {
+            setAuthError('Employee accounts need your name and an ID such as vc001.')
             return
           }
           setAuthSubmitting(true)
@@ -464,7 +465,7 @@ export default function App() {
               },
             })
             if (error) {
-              setAuthError('We could not create the account. Check your details or use an employee ID that has not already been registered.')
+              setAuthError(error.message || 'We could not create the account. Check your details or use an employee ID that has not already been registered.')
               return
             }
             if (!data.user) {
@@ -668,8 +669,8 @@ export default function App() {
               : <><button className="overview-link" onClick={() => goTo('dashboard')}><Icon name="arrow" size={15} /> Overview</button><Icon name="chevron" size={14} /><strong>{pageTitle(page, editing, isAdmin)}</strong></>}
           </div>
           <div className="account-chip">
-            <div className="avatar">{profile.full_name.slice(0, 1).toUpperCase()}</div>
-              <div className="account-text"><strong>{profile.full_name}</strong><span>{profile.employee_id} · {isAdmin ? 'Admin' : 'Employee'}</span></div>
+            <div className="avatar">{accountDisplayName.slice(0, 1).toUpperCase()}</div>
+              <div className="account-text"><strong>{accountDisplayName}</strong><span>{profile.employee_id} · {isAdmin ? 'Admin' : 'Employee'}</span></div>
             <button className="account-logout icon-button" aria-label="Sign out" title="Sign out" onClick={logout}><Icon name="logout" size={17} /></button>
           </div>
         </header>
@@ -891,6 +892,7 @@ function LoginScreen({
   onCreateAccount: (event: FormEvent<HTMLFormElement>) => void
 }) {
   const creating = mode === 'create'
+  const [showPassword, setShowPassword] = useState(false)
   return (
     <div className="login-screen">
       <section className="login-art">
@@ -917,10 +919,16 @@ function LoginScreen({
             <input id="create-name" className="text-input" autoComplete="name" placeholder="Your full name" value={fullName} onChange={(event) => onFullName(event.target.value)} required />
           </>}
           <label className="field-label login-field-label" htmlFor="employee-id">{creating ? 'Employee ID' : 'Employee / admin ID'}</label>
-          <input id="employee-id" className="text-input id-input" autoCapitalize="none" autoComplete="username" placeholder={creating ? 'e.g. emp001' : 'e.g. emp001 or admin001'} value={employeeId} onChange={(event) => onEmployeeId(event.target.value)} required />
-          {creating && <span className="field-hint">Employee sign-up accepts IDs like emp001 only. Admin IDs cannot be created here; an administrator must provision them separately.</span>}
-          <div className="password-label"><label className="field-label" htmlFor="login-password">Password</label>{creating && <span>10+ characters</span>}</div>
-          <input id="login-password" className="text-input" type="password" autoComplete={creating ? 'new-password' : 'current-password'} placeholder={creating ? 'Choose a secure password' : 'Enter your password'} value={password} onChange={(event) => onPassword(event.target.value)} minLength={creating ? 10 : undefined} required />
+          <input id="employee-id" className="text-input id-input" autoCapitalize="none" autoComplete="username" placeholder={creating ? 'e.g. vc001' : 'e.g. vc001 or admin001'} value={employeeId} onChange={(event) => onEmployeeId(event.target.value)} required />
+          {creating && <span className="field-hint">Employee sign-up accepts IDs like vc001 only. Admin IDs cannot be created here; an administrator must provision them separately.</span>}
+          <div className="password-label"><label className="field-label" htmlFor="login-password">Password</label></div>
+          <div className="password-input-wrap">
+            <input id="login-password" className="text-input" type={showPassword ? 'text' : 'password'} autoComplete={creating ? 'new-password' : 'current-password'} placeholder={creating ? 'Choose a password' : 'Enter your password'} value={password} onChange={(event) => onPassword(event.target.value)} required />
+            <button className="password-visibility" type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>
+              <Icon name={showPassword ? 'eyeOff' : 'eye'} size={17} />
+              <span>{showPassword ? 'Hide' : 'Show'}</span>
+            </button>
+          </div>
           {!creating && <label className="remember-control"><input type="checkbox" checked={rememberMe} onChange={(event) => onRememberMe(event.target.checked)} /><span className="custom-checkbox"><Icon name="check" size={12} /></span><span>Remember me</span><small>This device</small></label>}
           {error && <div className="form-alert" role="alert">{error}</div>}
           {message && <div className="auth-success-message" role="status">{message}</div>}
