@@ -49,9 +49,9 @@ Supabase password authentication still uses an internal synthetic email of the f
 
 If you already have data from an earlier email-based deployment, do not create replacement accounts until you have planned how to map the old auth UUIDs and customer rows to the new employee IDs. Existing records stay associated with their original `user_id`.
 
-## Data and CSV
+## Reports and navigation
 
-CSV export downloads all records visible to the current user in the required 15-column order. It includes a UTF-8 BOM, correctly quotes/escapes fields, and neutralizes formula-leading text values for spreadsheet safety. For sector `Others`, the exported Sector value is the entered other-sector name. The database `brands` value is retained in the app but excluded from the exact 15-column export template.
+The app uses a single overview with shortcuts to add and view customer records; there is no sidebar or CSV export. Admin reports can be filtered by a custom inclusive date range using the submission date.
 
 ## Build
 
@@ -61,6 +61,6 @@ npm run build
 
 ## Hosted APK updates
 
-The mobile menu's **Check for updates** action compares the installed web build with `/version.json`, which each Vite build generates automatically. The APK must load the hosted web app URL for **Update now** to fetch the current deployment; it reloads the hosted app and preserves the current route. It does not replace an APK with locally bundled assets or update the native Android package. For those distribution models, publish an APK through Google Play or configure a native OTA update service instead.
+The overview's **Check updates** action compares the installed web build with `/version.json`, which each Vite build generates automatically. The APK must load the hosted web app URL for **Update now** to fetch the current deployment; it reloads the hosted app and preserves the current route. It does not replace an APK with locally bundled assets or update the native Android package. For those distribution models, publish an APK through Google Play or configure a native OTA update service instead.
 
 Configure the host/CDN to serve `version.json` and `index.html` with `Cache-Control: no-store` (or equivalent revalidation), while hashed files in `assets/` may be cached as immutable. Deploy the complete new `dist` output together so the version marker and assets refer to the same release.

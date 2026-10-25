@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { downloadCustomersCsv } from './csv'
 import { isSupabaseConfigured, setRememberSession, supabase } from './supabase'
 import type { Customer, CustomerFormValues, Page, Sector, UserProfile } from './types'
 import { sectors } from './types'
@@ -50,7 +49,7 @@ function Icon({
   name,
   size = 18,
 }: {
-  name: 'grid' | 'users' | 'plus' | 'download' | 'search' | 'logout' | 'chevron' | 'arrow' | 'edit' | 'trash' | 'close' | 'check' | 'building' | 'menu' | 'refresh' | 'clock' | 'sparkles'
+  name: 'users' | 'plus' | 'search' | 'logout' | 'chevron' | 'arrow' | 'edit' | 'trash' | 'close' | 'check' | 'building' | 'refresh' | 'clock' | 'sparkles'
   size?: number
 }) {
   const common = {
@@ -66,10 +65,8 @@ function Icon({
   }
 
   const paths: Record<typeof name, ReactNode> = {
-    grid: <><rect x="3" y="3" width="7" height="7" rx="1.4" /><rect x="14" y="3" width="7" height="7" rx="1.4" /><rect x="3" y="14" width="7" height="7" rx="1.4" /><rect x="14" y="14" width="7" height="7" rx="1.4" /></>,
     users: <><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="10" cy="7" r="4" /><path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></>,
     plus: <><path d="M12 5v14M5 12h14" /></>,
-    download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5M12 15V3" /></>,
     search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
     logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5M21 12H9" /></>,
     chevron: <><path d="m9 18 6-6-6-6" /></>,
@@ -79,7 +76,6 @@ function Icon({
     close: <><path d="m18 6-12 12M6 6l12 12" /></>,
     check: <><path d="m5 12 4 4L19 6" /></>,
     building: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M9 21v-4h6v4M8 7h1m6 0h1M8 11h1m6 0h1" /></>,
-    menu: <><path d="M4 6h16M4 12h16M4 18h16" /></>,
     refresh: <><path d="M20 7v5h-5M4 17v-5h5" /><path d="M5.6 9A7 7 0 0 1 17.2 5L20 7M4 17l2.8 2A7 7 0 0 0 18.4 15" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     sparkles: <><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z" /><path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14Z" /></>,
@@ -98,6 +94,14 @@ function formatDate(value: string): string {
     month: 'short',
     year: 'numeric',
   }).format(new Date(value))
+}
+
+function localDateKey(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
 }
 
 function sectorLabel(customer: Customer): string {
@@ -204,8 +208,9 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [sectorFilter, setSectorFilter] = useState('')
   const [cityFilter, setCityFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [sortBy, setSortBy] = useState('newest')
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
   const [updateCheckState, setUpdateCheckState] = useState<'idle' | 'checking' | 'available' | 'current' | 'error'>('idle')
   const [availableVersion, setAvailableVersion] = useState('')
@@ -341,7 +346,9 @@ export default function App() {
       return (
         (!query || searchable.includes(query)) &&
         (!sectorFilter || customer.sector === sectorFilter) &&
-        (!cityFilter || customer.city === cityFilter)
+        (!cityFilter || customer.city === cityFilter) &&
+        (!fromDate || localDateKey(customer.created_at) >= fromDate) &&
+        (!toDate || localDateKey(customer.created_at) <= toDate)
       )
     })
 
@@ -350,7 +357,7 @@ export default function App() {
       return filtered.sort((a, b) => a.customer_name.localeCompare(b.customer_name))
     }
     return filtered.sort((a, b) => b.serial_number - a.serial_number)
-  }, [customers, search, sectorFilter, cityFilter, sortBy])
+  }, [customers, search, sectorFilter, cityFilter, fromDate, toDate, sortBy])
 
   const stats = useMemo(
     () => ({
@@ -510,21 +517,18 @@ export default function App() {
     setFormError('')
     setSavedCustomer(null)
     setPage('add')
-    setMobileNavOpen(false)
   }
 
   const openCustomer = (customer: Customer) => {
     setSelected(customer)
     setEditing(false)
     setPage('detail')
-    setMobileNavOpen(false)
   }
 
   const goTo = (nextPage: Page) => {
     setPage(nextPage)
     setEditing(false)
     setSavedCustomer(null)
-    setMobileNavOpen(false)
     if (nextPage !== 'detail') setSelected(null)
   }
 
@@ -611,19 +615,6 @@ export default function App() {
     }
   }
 
-  const exportCsv = () => {
-    if (!customers.length) {
-      notify('There are no customer records to export yet.', 'info')
-      return
-    }
-    try {
-      downloadCustomersCsv(customers)
-      notify('Your CSV export is ready.')
-    } catch {
-      notify('The CSV export could not be generated. Please try again.', 'error')
-    }
-  }
-
   const logout = async () => {
     if (!supabase) return
     try {
@@ -640,7 +631,6 @@ export default function App() {
   }
 
   const checkForUpdates = async () => {
-    setMobileNavOpen(false)
     setUpdateDialogOpen(true)
     setUpdateCheckState('checking')
     setAvailableVersion('')
@@ -670,40 +660,13 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
-        <div className="sidebar-brand">
-          <Logo className="sidebar-logo" />
-          <div className="brand-title">Vedhas <span>Tracker</span></div>
-          <div className="brand-subtitle">{isAdmin ? 'ADMIN REPORTING' : 'EMPLOYEE WORKSPACE'}</div>
-        </div>
-        <nav className="side-nav" aria-label="Main navigation">
-          <p className="nav-caption">WORKSPACE</p>
-          <NavButton icon="grid" label="Overview" active={page === 'dashboard'} onClick={() => goTo('dashboard')} />
-          <NavButton icon="users" label={isAdmin ? 'Reports' : 'My customers'} active={page === 'customers' || page === 'detail'} onClick={() => goTo('customers')} />
-          {!isAdmin && <NavButton icon="plus" label="Add customer" active={page === 'add'} onClick={openAdd} />}
-          <p className="nav-caption nav-caption-spaced">YOUR ACCOUNT</p>
-          <button className="nav-item" onClick={exportCsv}>
-            <Icon name="download" /><span>Export CSV</span>
-          </button>
-          <button className="nav-item mobile-update-item" onClick={checkForUpdates}>
-            <Icon name="refresh" /><span>Check for updates</span>
-          </button>
-        </nav>
-        <div className="sidebar-footer">
-          <div className="secure-note"><span className="secure-dot" /> Your data is private</div>
-          <button className="nav-item logout-item" onClick={logout}>
-            <Icon name="logout" /><span>Sign out</span>
-          </button>
-          <div className="sidebar-version">Vedhas <strong>Tracker</strong> <span>·</span> v1.0</div>
-        </div>
-      </aside>
-      {mobileNavOpen && <button className="mobile-overlay" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
       <div className="main-column">
         <header className="topbar">
-          <button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}>
-            <Icon name="menu" size={21} />
-          </button>
-          <div className="topbar-crumb"><span>Workspace</span><Icon name="chevron" size={14} /><strong>{pageTitle(page, editing, isAdmin)}</strong></div>
+          <div className="topbar-crumb">
+            {page === 'dashboard'
+              ? <><span>Workspace</span><Icon name="chevron" size={14} /><strong>Overview</strong></>
+              : <><button className="overview-link" onClick={() => goTo('dashboard')}><Icon name="arrow" size={15} /> Overview</button><Icon name="chevron" size={14} /><strong>{pageTitle(page, editing, isAdmin)}</strong></>}
+          </div>
           <div className="account-chip">
             <div className="avatar">{profile.full_name.slice(0, 1).toUpperCase()}</div>
               <div className="account-text"><strong>{profile.full_name}</strong><span>{profile.employee_id} · {isAdmin ? 'Admin' : 'Employee'}</span></div>
@@ -727,7 +690,7 @@ export default function App() {
               loading={customersLoading}
               onAdd={openAdd}
               onCustomers={() => goTo('customers')}
-              onExport={exportCsv}
+              onCheckForUpdates={() => void checkForUpdates()}
               onOpenCustomer={openCustomer}
             />
           )}
@@ -743,17 +706,22 @@ export default function App() {
               cityFilter={cityFilter}
               sortBy={sortBy}
               cities={cities}
+              fromDate={fromDate}
+              toDate={toDate}
               onSearch={setSearch}
               onSectorFilter={setSectorFilter}
               onCityFilter={setCityFilter}
               onSort={setSortBy}
+              onFromDate={setFromDate}
+              onToDate={setToDate}
               onAdd={openAdd}
-              onExport={exportCsv}
               onOpenCustomer={openCustomer}
               onClearFilters={() => {
                 setSearch('')
                 setSectorFilter('')
                 setCityFilter('')
+                setFromDate('')
+                setToDate('')
               }}
             />
           )}
@@ -798,14 +766,6 @@ export default function App() {
         </main>
         <footer className="page-footer">Vedhas <strong>Tracker</strong> <span>·</span> Simple customer tracking, thoughtfully done.</footer>
       </div>
-      <div className="mobile-bottom-nav">
-        <NavButton icon="grid" label="Home" active={page === 'dashboard'} onClick={() => goTo('dashboard')} />
-        <NavButton icon="users" label={isAdmin ? 'Reports' : 'My records'} active={page === 'customers' || page === 'detail'} onClick={() => goTo('customers')} />
-        {!isAdmin
-          ? <NavButton icon="plus" label="Add" active={page === 'add'} onClick={openAdd} />
-          : <button className="mobile-nav-button" onClick={exportCsv}><Icon name="download" /><span>Export</span></button>}
-        <button className="mobile-nav-button" onClick={logout}><Icon name="logout" /><span>Sign out</span></button>
-      </div>
       {updateDialogOpen && (
         <UpdateDialog
           state={updateCheckState}
@@ -815,16 +775,9 @@ export default function App() {
           onUpdate={applyUpdate}
         />
       )}
-      {notice && <div className={`toast toast-${notice.kind}`} role="status"><span className="toast-icon"><Icon name={notice.kind === 'success' ? 'check' : notice.kind === 'error' ? 'close' : 'download'} size={16} /></span>{notice.text}</div>}
+      {notice && <div className={`toast toast-${notice.kind}`} role="status"><span className="toast-icon"><Icon name={notice.kind === 'success' ? 'check' : notice.kind === 'error' ? 'close' : 'sparkles'} size={16} /></span>{notice.text}</div>}
     </div>
   )
-}
-
-function pageTitle(page: Page, editing: boolean, admin: boolean): string {
-  if (page === 'dashboard') return 'Overview'
-  if (page === 'customers') return admin ? 'Reports' : 'My customers'
-  if (page === 'add') return editing ? 'Edit customer' : 'Add customer'
-  return 'Customer details'
 }
 
 function UpdateDialog({
@@ -898,24 +851,6 @@ function UpdateDialog({
         <span className="update-footer">Your saved customer records are kept safe.</span>
       </section>
     </div>
-  )
-}
-
-function NavButton({
-  icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: 'grid' | 'users' | 'plus'
-  label: string
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button className={`nav-item ${active ? 'nav-item-active' : ''}`} onClick={onClick}>
-      <Icon name={icon} /><span>{label}</span>{active && <span className="nav-active-mark" />}
-    </button>
   )
 }
 
@@ -1000,6 +935,13 @@ function LoginScreen({
   )
 }
 
+function pageTitle(page: Page, editing: boolean, admin: boolean): string {
+  if (page === 'customers') return admin ? 'Reports' : 'My customers'
+  if (page === 'add') return editing ? 'Edit customer' : 'Add customer'
+  if (page === 'detail') return 'Customer details'
+  return 'Overview'
+}
+
 function Dashboard({
   profile,
   admin,
@@ -1008,7 +950,7 @@ function Dashboard({
   loading,
   onAdd,
   onCustomers,
-  onExport,
+  onCheckForUpdates,
   onOpenCustomer,
 }: {
   profile: UserProfile
@@ -1018,7 +960,7 @@ function Dashboard({
   loading: boolean
   onAdd: () => void
   onCustomers: () => void
-  onExport: () => void
+  onCheckForUpdates: () => void
   onOpenCustomer: (customer: Customer) => void
 }) {
   const metrics = [
@@ -1038,7 +980,10 @@ function Dashboard({
           <h1>{admin ? 'Admin reports' : `Welcome, ${profile.full_name.split(' ')[0]}`}<span className="welcome-period">.</span></h1>
           <p className="page-subtitle">{admin ? 'An overview of customer activity across your sales team.' : 'A clear view of your customer relationships, all in one place.'}</p>
         </div>
-        {!admin && <button className="button button-primary add-top-button" onClick={onAdd}><Icon name="plus" size={18} /> Add customer</button>}
+        <div className="welcome-actions">
+          <button className="button button-outline update-check-button" onClick={onCheckForUpdates} aria-label="Check for updates" title="Check for updates"><Icon name="refresh" size={16} /><span className="update-check-label">Check updates</span></button>
+          {!admin && <button className="button button-primary add-top-button" onClick={onAdd}><Icon name="plus" size={18} /> Add customer</button>}
+        </div>
       </div>
       <section className="stats-grid" aria-label="Customer totals">
         {metrics.map((metric) => (
@@ -1062,24 +1007,18 @@ function Dashboard({
             <span className="action-copy"><strong>{admin ? 'View all reports' : 'View my customers'}</strong><small>{admin ? 'Review every employee submission' : 'Search and manage your list'}</small></span>
             <Icon name="chevron" size={17} />
           </button>
-          <button className="quick-action" onClick={onExport}>
-            <span className="action-icon action-icon-green"><Icon name="download" size={18} /></span>
-            <span className="action-copy"><strong>Export data</strong><small>Download a CSV spreadsheet</small></span>
-            <Icon name="chevron" size={17} />
-          </button>
         </div>
       </section>
-      <section className="recent-section">
+      {admin && <section className="recent-section">
         <div className="section-title-row">
-          <div><div className="eyebrow"><span /> {admin ? 'TEAM ACTIVITY' : 'RECENT ACTIVITY'}</div><h2>{admin ? 'Recent submissions' : 'Recently added'}</h2></div>
-          {customers.length > 0 && <button className="text-link" onClick={onCustomers}>{admin ? 'View all reports' : 'View all customers'} <Icon name="chevron" size={15} /></button>}
+          <div><div className="eyebrow"><span /> TEAM ACTIVITY</div><h2>Recent submissions</h2></div>
+          {customers.length > 0 && <button className="text-link" onClick={onCustomers}>View all reports <Icon name="chevron" size={15} /></button>}
         </div>
         {loading ? <div className="loading-row"><span className="button-spinner" /> Loading your customers…</div> : customers.length === 0 ? (
           <div className="empty-state compact-empty">
             <span className="empty-icon"><Icon name="users" size={23} /></span>
-            <strong>{admin ? 'No submissions yet' : 'Your customer list starts here'}</strong>
-            <p>{admin ? 'Employee customer submissions will appear here.' : 'Add your first customer and their details will appear here.'}</p>
-            {!admin && <button className="button button-soft" onClick={onAdd}><Icon name="plus" size={16} /> Add your first customer</button>}
+            <strong>No submissions yet</strong>
+            <p>Employee customer submissions will appear here.</p>
           </div>
         ) : (
           <div className="recent-list">
@@ -1092,7 +1031,7 @@ function Dashboard({
             ))}
           </div>
         )}
-      </section>
+      </section>}
       <div className="dashboard-note"><span className="note-shield">✓</span><span><strong>{admin ? 'Admin reporting access' : 'Private to your account'}</strong> {admin ? 'You can view all employee submissions. Employees only see their own records.' : 'Only you and workspace admins can view your customer records.'}</span></div>
     </div>
   )
@@ -1109,12 +1048,15 @@ function CustomerList({
   cityFilter,
   sortBy,
   cities,
+  fromDate,
+  toDate,
   onSearch,
   onSectorFilter,
   onCityFilter,
   onSort,
+  onFromDate,
+  onToDate,
   onAdd,
-  onExport,
   onOpenCustomer,
   onClearFilters,
 }: {
@@ -1128,21 +1070,25 @@ function CustomerList({
   cityFilter: string
   sortBy: string
   cities: string[]
+  fromDate: string
+  toDate: string
   onSearch: (value: string) => void
   onSectorFilter: (value: string) => void
   onCityFilter: (value: string) => void
   onSort: (value: string) => void
+  onFromDate: (value: string) => void
+  onToDate: (value: string) => void
   onAdd: () => void
-  onExport: () => void
   onOpenCustomer: (customer: Customer) => void
   onClearFilters: () => void
 }) {
-  const hasFilters = Boolean(search || sectorFilter || cityFilter)
+  const hasFilters = Boolean(search || sectorFilter || cityFilter || fromDate || toDate)
+  const invalidDateRange = Boolean(fromDate && toDate && fromDate > toDate)
   return (
     <div className="list-page">
       <div className="page-heading-row">
-        <div><div className="eyebrow"><span /> {admin ? 'TEAM REPORTS' : 'CUSTOMER DIRECTORY'}</div><h1>{admin ? 'All customer reports' : 'My customers'}</h1><p className="page-subtitle">{admin ? 'Review and export customer records submitted by your employees.' : 'These are the customers you have submitted.'}</p></div>
-        <div className="heading-actions"><button className="button button-outline" onClick={onExport}><Icon name="download" size={17} /> Export CSV</button>{!admin && <button className="button button-primary" onClick={onAdd}><Icon name="plus" size={18} /> Add customer</button>}</div>
+        <div><div className="eyebrow"><span /> {admin ? 'TEAM REPORTS' : 'CUSTOMER DIRECTORY'}</div><h1>{admin ? 'All customer reports' : 'My customers'}</h1><p className="page-subtitle">{admin ? 'Review customer records submitted by your employees.' : 'These are the customers you have submitted.'}</p></div>
+        {!admin && <div className="heading-actions"><button className="button button-primary" onClick={onAdd}><Icon name="plus" size={18} /> Add customer</button></div>}
       </div>
       <section className="list-card">
         <div className="list-toolbar">
@@ -1151,9 +1097,14 @@ function CustomerList({
             <label className="search-control"><Icon name="search" size={17} /><input aria-label="Search customers" placeholder="Search customers…" value={search} onChange={(event) => onSearch(event.target.value)} />{search && <button aria-label="Clear search" onClick={() => onSearch('')}><Icon name="close" size={14} /></button>}</label>
             <select aria-label="Filter by sector" value={sectorFilter} onChange={(event) => onSectorFilter(event.target.value)}><option value="">All sectors</option>{sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}</select>
             <select aria-label="Filter by city" value={cityFilter} onChange={(event) => onCityFilter(event.target.value)}><option value="">All cities</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select>
+            {admin && <>
+              <label className="date-filter"><span>From</span><input aria-label="From date" type="date" value={fromDate} max={toDate || undefined} onChange={(event) => onFromDate(event.target.value)} /></label>
+              <label className="date-filter"><span>To</span><input aria-label="To date" type="date" value={toDate} min={fromDate || undefined} onChange={(event) => onToDate(event.target.value)} /></label>
+            </>}
             <select aria-label="Sort customers" value={sortBy} onChange={(event) => onSort(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name A–Z</option></select>
           </div>
         </div>
+        {invalidDateRange && <div className="date-range-error" role="alert">The start date must be on or before the end date.</div>}
         {loading ? <div className="list-loading"><span className="button-spinner" /> Loading customer records…</div> : customers.length === 0 ? (
           <div className="empty-state list-empty">
             <span className="empty-icon"><Icon name={hasFilters ? 'search' : 'users'} size={23} /></span>
