@@ -1,0 +1,1 @@
+window.VEDHAS_SUPABASE_CONFIG = {"anonKey":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlnd3l0b2FhYWt1Z2Nhb3p6cWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1OTE5OTIsImV4cCI6MjEwODE2Nzk5Mn0.SrIh4HztldOKvgYSjwaqBFW2WoePMW3KKPsCRR5sQAA","url":"https://ygwytoaaakugcaozzqcy.supabase.co"};

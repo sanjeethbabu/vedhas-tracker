@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || window.VEDHAS_SUPABASE_CONFIG?.url)?.trim()
+const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || window.VEDHAS_SUPABASE_CONFIG?.anonKey)?.trim()
 const persistenceKey = 'vedhas-tracker-remember-session'
 
 let rememberSession = window.sessionStorage.getItem(persistenceKey) !== 'false'

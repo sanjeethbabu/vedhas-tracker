@@ -43,21 +43,21 @@ A mobile-first customer tracker for sales employees and read-only sales reportin
    ```
 
    The function uses the project's server-side `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to create an auth user and employee profile. The service-role key must never be put in `.env`, frontend code, or any `VITE_` variable. The function accepts employee IDs only (`emp` plus at least three digits); it cannot create admins.
-6. Copy `.env.example` to `.env` and provide the browser-safe project URL and publishable (or legacy anon) key from **Project Settings → API**:
+6. For local development, copy `.env.example` to `.env` and provide the browser-safe project URL and publishable (or legacy anon) key from **Project Settings → API**:
 
    ```env
    VITE_SUPABASE_URL=https://your-project-id.supabase.co
    VITE_SUPABASE_ANON_KEY=your-publishable-or-anon-key
    ```
 
-6. Start the app:
+7. Start the app:
 
    ```powershell
    npm install
    npm run dev
    ```
 
-The local `.env` is ignored by Git. Restart Vite after changing it. For deployment, configure the same two public values in the hosting provider, then rebuild.
+The local `.env` is ignored by Git. Restart Vite after changing it. For a deployment that does not use hosting environment variables, put the project URL and publishable/anon key in `public/supabase-config.js`. This file is served publicly, as are all Vite `VITE_` values, so only use the publishable/anon key—never a service-role key. The database must have the row-level security policies in `supabase/schema.sql` enabled. Commit the config file with the app and redeploy; local `.env` values take precedence when provided.
 
 ## ID-only authentication
 

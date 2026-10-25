@@ -970,7 +970,7 @@ function LoginScreen({
           <div className="eyebrow"><span /> {creating ? 'EMPLOYEE REGISTRATION' : 'SECURE SIGN IN'}</div>
           <h2>{creating ? 'Create your account' : 'Welcome back'}</h2>
           <p className="login-intro">{creating ? 'Set up your employee access to Vedhas Tracker.' : 'Sign in with your employee or admin ID.'}</p>
-          {!configured && <div className="config-reminder"><strong>Supabase setup needed</strong><span>Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to a local <code>.env</code> file, then restart the app.</span></div>}
+          {!configured && <div className="config-reminder"><strong>Supabase setup needed</strong><span>Set the project URL and publishable/anon key in <code>public/supabase-config.js</code>, then rebuild and redeploy. For local development, you can also set them in <code>.env</code>.</span></div>}
           {creating && <>
             <label className="field-label login-field-label" htmlFor="create-name">Full name</label>
             <input id="create-name" className="text-input" autoComplete="name" placeholder="Your full name" value={fullName} onChange={(event) => onFullName(event.target.value)} required />
