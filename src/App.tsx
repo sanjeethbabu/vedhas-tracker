@@ -331,6 +331,34 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [updateDialogOpen, updateCheckState])
 
+  const checkForUpdates = useCallback(async (showChecking = true) => {
+    if (showChecking) {
+      setUpdateDialogOpen(true)
+      setUpdateCheckState('checking')
+    }
+    setAvailableVersion('')
+    try {
+      const response = await fetch(`/version.json?check=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      })
+      if (!response.ok) throw new Error('Version check failed.')
+      const published = await response.json() as { version?: unknown }
+      if (typeof published.version !== 'string' || !published.version) {
+        throw new Error('Published app version is unavailable.')
+      }
+      setAvailableVersion(published.version)
+      setUpdateCheckState(published.version === __APP_VERSION__ ? 'current' : 'available')
+      if (published.version !== __APP_VERSION__) setUpdateDialogOpen(true)
+    } catch {
+      setUpdateCheckState('error')
+    }
+  }, [])
+
+  useEffect(() => {
+    void checkForUpdates(false)
+  }, [checkForUpdates])
+
   const cities = useMemo(
     () =>
       [...new Set(customers.map((customer) => customer.city?.trim()).filter(Boolean) as string[])]
@@ -441,10 +469,14 @@ export default function App() {
               password,
             })
             if (error) {
-              setAuthError('Sign in failed. Check your ID and password, then try again.')
+              setAuthError(error.code === 'invalid_credentials'
+                ? `Sign in failed. Check the password and confirm the Supabase Auth email is ${id}@accounts.vedhas.local.`
+                : `Sign in failed: ${error.message}`)
             }
-          } catch {
-            setAuthError('Sign in failed. Check your ID and password, then try again.')
+          } catch (error) {
+            setAuthError(error instanceof Error
+              ? `Could not reach Supabase: ${error.message}`
+              : 'Could not reach Supabase. Check your connection and try again.')
           } finally {
             setAuthSubmitting(false)
           }
@@ -640,34 +672,6 @@ export default function App() {
       notify('We could not sign you out. Please try again.', 'error')
     }
   }
-
-  const checkForUpdates = useCallback(async (showChecking = true) => {
-    if (showChecking) {
-      setUpdateDialogOpen(true)
-      setUpdateCheckState('checking')
-    }
-    setAvailableVersion('')
-    try {
-      const response = await fetch(`/version.json?check=${Date.now()}`, {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' },
-      })
-      if (!response.ok) throw new Error('Version check failed.')
-      const published = await response.json() as { version?: unknown }
-      if (typeof published.version !== 'string' || !published.version) {
-        throw new Error('Published app version is unavailable.')
-      }
-      setAvailableVersion(published.version)
-      setUpdateCheckState(published.version === __APP_VERSION__ ? 'current' : 'available')
-      if (published.version !== __APP_VERSION__) setUpdateDialogOpen(true)
-    } catch {
-      setUpdateCheckState('error')
-    }
-  }, [])
-
-  useEffect(() => {
-    void checkForUpdates(false)
-  }, [checkForUpdates])
 
   const applyUpdate = () => {
     if (updateCheckState !== 'available') return
