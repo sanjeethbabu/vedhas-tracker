@@ -432,7 +432,7 @@ export default function App() {
           setAuthError('')
           setAuthMessage('')
           if (!supabase) {
-            setAuthError('Connect Supabase and deploy the account function before creating accounts.')
+            setAuthError('Connect this app to Supabase before creating an account.')
             return
           }
           const id = employeeId.trim().toLowerCase()
@@ -446,33 +446,31 @@ export default function App() {
           }
           setAuthSubmitting(true)
           try {
-            const { data, error } = await supabase.functions.invoke('create-employee-account', {
-              body: { fullName: fullName.trim(), employeeId: id, password },
+            const { data, error } = await supabase.auth.signUp({
+              email: `${id}@accounts.vedhas.local`,
+              password,
+              options: {
+                data: {
+                  employee_id: id,
+                  full_name: fullName.trim(),
+                },
+              },
             })
             if (error) {
-              const response = 'context' in error && error.context instanceof Response
-                ? error.context
-                : null
-              const responseBody = response
-                ? await response.json().catch(() => null) as { error?: string } | null
-                : null
-              const message = responseBody?.error ?? data?.error
-              if (message) {
-                setAuthError(message)
-              } else if (response?.status === 404 || !response) {
-                setAuthError('Employee registration is unavailable. Ask your administrator to deploy the create-employee-account function to this Supabase project.')
-              } else {
-                setAuthError('We could not create the account. Check the Supabase function logs or try again later.')
-              }
+              setAuthError('We could not create the account. Check your details or use an employee ID that has not already been registered.')
               return
             }
-            if (!data?.message) {
-              setAuthError('We could not create the account. Check the ID and try again.')
+            if (!data.user) {
+              setAuthError('Supabase did not create an account. Check the project configuration and try again.')
+              return
+            }
+            if (!data.session) {
+              setAuthError('The account was created, but email confirmation is enabled. Ask your Supabase administrator to turn off email confirmation for ID-based accounts.')
               return
             }
             setAuthMode('login')
             setPassword('')
-            setAuthMessage('Employee account created. Sign in with your ID and password.')
+            setAuthMessage('Employee account created. Signing you in…')
           } catch {
             setAuthError('We could not create the account. Check your connection and try again.')
           } finally {
@@ -984,7 +982,7 @@ function LoginScreen({
           </>}
           <label className="field-label login-field-label" htmlFor="employee-id">{creating ? 'Employee ID' : 'Employee / admin ID'}</label>
           <input id="employee-id" className="text-input id-input" autoCapitalize="none" autoComplete="username" placeholder={creating ? 'e.g. emp001' : 'e.g. emp001 or admin001'} value={employeeId} onChange={(event) => onEmployeeId(event.target.value)} required />
-          {creating && <span className="field-hint">Use the emp001 ID assigned and approved by your administrator. Admin accounts are created separately.</span>}
+          {creating && <span className="field-hint">Employee sign-up accepts IDs like emp001 only. Admin IDs cannot be created here; an administrator must provision them separately.</span>}
           <div className="password-label"><label className="field-label" htmlFor="login-password">Password</label>{creating && <span>10+ characters</span>}</div>
           <input id="login-password" className="text-input" type="password" autoComplete={creating ? 'new-password' : 'current-password'} placeholder={creating ? 'Choose a secure password' : 'Enter your password'} value={password} onChange={(event) => onPassword(event.target.value)} minLength={creating ? 10 : undefined} required />
           {!creating && <label className="remember-control"><input type="checkbox" checked={rememberMe} onChange={(event) => onRememberMe(event.target.checked)} /><span className="custom-checkbox"><Icon name="check" size={12} /></span><span>Remember me</span><small>This device</small></label>}
@@ -996,7 +994,7 @@ function LoginScreen({
           <div className="login-security"><span className="security-lock">✓</span> Your customer data is protected by row-level security.</div>
           <div className="auth-switch">{creating ? 'Already have an account?' : 'New employee?'} <button type="button" onClick={() => onModeChange(creating ? 'login' : 'create')}>{creating ? 'Sign in' : 'Create account'}</button></div>
         </form>
-        <div className="login-footer">{creating ? 'Employee IDs must be approved by your administrator. Admin accounts are provisioned separately.' : 'Ask your administrator for an approved employee ID or account access.'}</div>
+        <div className="login-footer">{creating ? 'Employee IDs can only be registered once. Admin accounts are provisioned separately.' : 'Ask your administrator for your account ID or access.'}</div>
       </section>
     </div>
   )

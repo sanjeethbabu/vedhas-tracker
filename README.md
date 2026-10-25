@@ -8,13 +8,13 @@ A mobile-first customer tracker for sales employees and read-only sales reportin
 - Administrators sign in with an ID such as `admin001` and a password. They can view and export all employee submissions; admin reports are read-only.
 - Role access comes from `public.profiles` and Supabase Row Level Security. The ID prefix is not itself an authorization check.
 - The login page's **Create account** flow creates employee accounts only. Admin accounts must be provisioned by the project owner.
-- Employee IDs must be approved in advance by an administrator; users cannot claim an arbitrary employee ID during sign-up.
+- Employees can create their own accounts with a unique `emp` ID. Admin IDs and roles cannot be created through public sign-up.
 - **Remember me** keeps the Supabase session in local storage. When unchecked, it uses session storage and is cleared when the browser tab/session ends.
 
 ## Supabase setup
 
 1. Install Node.js 20.19+ or 22.12+.
-2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). It creates the `profiles` and `customers` tables, admin-role helper, updated-at trigger, and row-level policies.
+2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). **This script first drops and recreates the app tables**, permanently deleting all customer records, employee profiles, and pending employee invitations. Supabase Auth users and passwords are not deleted, but their profiles must be reinserted before they can use the app. Do not rerun this reset on a live database unless you intend to erase that app data. The script creates the profiles/customers tables, role helpers, triggers, and row-level policies.
 3. Create the first administrator:
    1. In **Authentication → Users**, add a confirmed user with email `admin001@accounts.vedhas.local` and a secure password.
    2. Copy that auth user's UUID.
@@ -26,31 +26,15 @@ A mobile-first customer tracker for sales employees and read-only sales reportin
       ```
 
    4. Sign in with `admin001` and the password created above. Do not expose the password in SQL or source code.
-4. Approve employee IDs before employees use **Create account**. In SQL Editor, insert IDs your organization has assigned:
-
-   ```sql
-   insert into public.employee_invites (employee_id)
-   values ('emp001'), ('emp002');
-   ```
-
-   The Edge Function consumes an approved ID when its account is created. It rejects unapproved IDs and only assigns the employee role.
-5. Link the project and deploy the employee account function using the Supabase CLI:
-
-   ```powershell
-   supabase login
-   supabase link --project-ref YOUR_PROJECT_REF
-   supabase functions deploy create-employee-account
-   ```
-
-   The function uses the project's server-side `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to create an auth user and employee profile. The service-role key must never be put in `.env`, frontend code, or any `VITE_` variable. The function accepts employee IDs only (`emp` plus at least three digits); it cannot create admins.
-6. For local development, copy `.env.example` to `.env` and provide the browser-safe project URL and publishable (or legacy anon) key from **Project Settings → API**:
+4. In Supabase **Authentication → Providers → Email**, turn off **Confirm email**. Accounts use an internal, non-deliverable address derived from the employee ID, so they cannot complete an email confirmation link.
+5. For local development, copy `.env.example` to `.env` and provide the browser-safe project URL and publishable (or legacy anon) key from **Project Settings → API**:
 
    ```env
    VITE_SUPABASE_URL=https://your-project-id.supabase.co
    VITE_SUPABASE_ANON_KEY=your-publishable-or-anon-key
    ```
 
-7. Start the app:
+6. Start the app:
 
    ```powershell
    npm install
@@ -61,7 +45,7 @@ The local `.env` is ignored by Git. Restart Vite after changing it. For a deploy
 
 ## ID-only authentication
 
-Supabase password authentication still uses an internal synthetic email of the form `emp001@accounts.vedhas.local` or `admin001@accounts.vedhas.local`. The app derives it from the submitted ID and never asks the user for an email. Employees register through the deployed Edge Function after an admin has approved their ID in `employee_invites`; administrators are provisioned through Supabase Auth and the protected `profiles` table. Because these IDs are not email addresses, password recovery must be handled by an administrator resetting the user's password in Supabase Auth.
+Supabase password authentication still uses an internal synthetic email of the form `emp001@accounts.vedhas.local` or `admin001@accounts.vedhas.local`. The app derives it from the submitted ID and never asks the user for an email. Employee registration creates the Supabase Auth account and a database trigger creates its profile. Employee IDs must be unique, and the trigger always assigns the employee role; public sign-up cannot create admin profiles. Administrators are provisioned separately through Supabase Auth and the protected `profiles` table. Because these IDs are not email addresses, password recovery must be handled by an administrator resetting the user's password in Supabase Auth.
 
 If you already have data from an earlier email-based deployment, do not create replacement accounts until you have planned how to map the old auth UUIDs and customer rows to the new employee IDs. Existing records stay associated with their original `user_id`.
 

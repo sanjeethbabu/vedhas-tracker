@@ -1,4 +1,15 @@
 -- Run this in the Supabase SQL Editor for your project.
+-- DESTRUCTIVE RESET: this removes all customer records and employee profiles.
+-- Supabase Auth users and passwords are not deleted; recreate their profiles after the schema runs.
+drop trigger if exists create_employee_profile_after_auth_signup on auth.users;
+drop table if exists public.customers;
+drop table if exists public.employee_invites;
+drop table if exists public.profiles;
+drop function if exists public.create_employee_profile_for_auth_user();
+drop function if exists public.set_customer_updated_at();
+drop function if exists public.is_admin();
+drop function if exists public.is_employee();
+
 create table if not exists public.profiles (
   user_id uuid primary key references auth.users (id) on delete cascade,
   employee_id text not null check (
@@ -60,23 +71,45 @@ create policy "Users can read their own profile or admins can read all"
 
 grant select on public.profiles to authenticated;
 
-create table if not exists public.employee_invites (
-  employee_id text primary key check (
-    employee_id = lower(employee_id)
-    and employee_id ~ '^emp[0-9]{3,}$'
-  ),
-  created_at timestamptz not null default now()
-);
+create or replace function public.create_employee_profile_for_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  employee_id_value text := lower(trim(coalesce(new.raw_user_meta_data ->> 'employee_id', '')));
+  full_name_value text := trim(coalesce(new.raw_user_meta_data ->> 'full_name', ''));
+begin
+  if employee_id_value = '' then
+    return new;
+  end if;
 
-alter table public.employee_invites enable row level security;
+  if employee_id_value ~ '^admin' then
+    raise exception 'Admin accounts cannot be created through employee sign-up.';
+  end if;
 
-drop policy if exists "Admins can manage employee invitations" on public.employee_invites;
-create policy "Admins can manage employee invitations"
-  on public.employee_invites for all to authenticated
-  using ((select public.is_admin()))
-  with check ((select public.is_admin()));
+  if employee_id_value !~ '^emp[0-9]{3,}$'
+    or length(full_name_value) < 2
+    or length(full_name_value) > 120
+    or new.email is distinct from (employee_id_value || '@accounts.vedhas.local')
+  then
+    raise exception 'Invalid employee account details.';
+  end if;
 
-grant select, insert, update, delete on public.employee_invites to authenticated;
+  insert into public.profiles (user_id, employee_id, full_name, role)
+  values (new.id, employee_id_value, full_name_value, 'employee');
+
+  return new;
+end;
+$$;
+
+revoke all on function public.create_employee_profile_for_auth_user() from public, anon, authenticated;
+
+drop trigger if exists create_employee_profile_after_auth_signup on auth.users;
+create trigger create_employee_profile_after_auth_signup
+  after insert on auth.users
+  for each row execute function public.create_employee_profile_for_auth_user();
 
 create table if not exists public.customers (
   id uuid primary key default gen_random_uuid(),
