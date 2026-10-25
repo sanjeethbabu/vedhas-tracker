@@ -11,6 +11,8 @@ type FormState = {
   other_sector: string
   poc_name: string
   contact_number: string
+  alternative_poc_name: string
+  alternative_poc_contact: string
   beat_no: string
   area: string
   city: string
@@ -32,6 +34,8 @@ const emptyForm: FormState = {
   other_sector: '',
   poc_name: '',
   contact_number: '',
+  alternative_poc_name: '',
+  alternative_poc_contact: '',
   beat_no: '',
   area: '',
   city: '',
@@ -119,6 +123,8 @@ function customerToForm(customer: Customer): FormState {
     other_sector: customer.other_sector ?? '',
     poc_name: customer.poc_name ?? '',
     contact_number: customer.contact_number ?? '',
+    alternative_poc_name: customer.alternative_poc_name ?? '',
+    alternative_poc_contact: customer.alternative_poc_contact ?? '',
     beat_no: customer.beat_no ?? '',
     area: customer.area ?? '',
     city: customer.city ?? '',
@@ -143,6 +149,8 @@ function formToCustomer(values: FormState): CustomerFormValues {
     other_sector: values.sector === 'Others' ? values.other_sector.trim() : null,
     poc_name: values.poc_name.trim() || null,
     contact_number: values.contact_number.trim() || null,
+    alternative_poc_name: values.alternative_poc_name.trim() || null,
+    alternative_poc_contact: values.alternative_poc_contact.trim() || null,
     beat_no: values.beat_no.trim() || null,
     area: values.area.trim() || null,
     city: values.city.trim() || null,
@@ -341,6 +349,8 @@ export default function App() {
         customer.customer_name,
         customer.poc_name,
         customer.contact_number,
+        customer.alternative_poc_name,
+        customer.alternative_poc_contact,
         customer.area,
         customer.city,
         customer.location,
@@ -631,9 +641,11 @@ export default function App() {
     }
   }
 
-  const checkForUpdates = async () => {
-    setUpdateDialogOpen(true)
-    setUpdateCheckState('checking')
+  const checkForUpdates = useCallback(async (showChecking = true) => {
+    if (showChecking) {
+      setUpdateDialogOpen(true)
+      setUpdateCheckState('checking')
+    }
     setAvailableVersion('')
     try {
       const response = await fetch(`/version.json?check=${Date.now()}`, {
@@ -647,10 +659,15 @@ export default function App() {
       }
       setAvailableVersion(published.version)
       setUpdateCheckState(published.version === __APP_VERSION__ ? 'current' : 'available')
+      if (published.version !== __APP_VERSION__) setUpdateDialogOpen(true)
     } catch {
       setUpdateCheckState('error')
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    void checkForUpdates(false)
+  }, [checkForUpdates])
 
   const applyUpdate = () => {
     if (updateCheckState !== 'available') return
@@ -1146,7 +1163,7 @@ function CustomerList({
         ) : (
           <>
             <div className="table-scroll"><table className="customer-table">
-              <thead><tr><th>S.NO.</th>{admin && <th>SALES EMPLOYEE</th>}<th>CUSTOMER NAME</th><th>SECTOR</th><th>POC</th><th>CONTACT NUMBER</th><th>BEAT NO</th><th>AREA</th><th>CITY</th><th>LOCATION</th><th>ROOM COUNT</th><th>STRENGTH</th><th>BRANCHES</th><th>BRANDS</th><th>LITRES / MONTH</th><th>CURRENT PURCHASE</th><th>REMARKS</th><th aria-label="Open" /></tr></thead>
+              <thead><tr><th>S.NO.</th>{admin && <th>SALES EMPLOYEE</th>}<th>CUSTOMER NAME</th><th>SECTOR</th><th>POC</th><th>CONTACT NUMBER</th><th>ALTERNATIVE POC</th><th>ALTERNATIVE POC CONTACT</th><th>BEAT NO</th><th>AREA</th><th>CITY</th><th>LOCATION</th><th>ROOM COUNT</th><th>STRENGTH</th><th>BRANCHES</th><th>BRANDS</th><th>LITRES / MONTH</th><th>CURRENT PURCHASE</th><th>REMARKS</th><th aria-label="Open" /></tr></thead>
               <tbody>{customers.map((customer) => (
                 <tr key={customer.id} onClick={() => onOpenCustomer(customer)}>
                   <td><span className="serial-pill">{customer.serial_number}</span></td>
@@ -1155,6 +1172,8 @@ function CustomerList({
                   <td><span className="sector-pill">{sectorLabel(customer)}</span></td>
                   <td>{customer.poc_name || <span className="muted-dash">—</span>}</td>
                   <td>{customer.contact_number || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.alternative_poc_name || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.alternative_poc_contact || <span className="muted-dash">—</span>}</td>
                   <td>{customer.beat_no || <span className="muted-dash">—</span>}</td>
                   <td>{customer.area || <span className="muted-dash">—</span>}</td>
                   <td>{customer.city || <span className="muted-dash">—</span>}</td>
@@ -1240,6 +1259,8 @@ function CustomerForm({
           <div className="form-grid">
             <Field label="POC (Point of Contact)"><input className="text-input" placeholder="Contact person's name" value={form.poc_name} onChange={(event) => setField('poc_name', event.target.value)} /></Field>
             <Field label="Contact number"><input className="text-input" type="tel" inputMode="tel" placeholder="Include area code if needed" value={form.contact_number} onChange={(event) => setField('contact_number', event.target.value)} /></Field>
+            <Field label="Alternative POC"><input className="text-input" placeholder="Alternative contact person's name" value={form.alternative_poc_name} onChange={(event) => setField('alternative_poc_name', event.target.value)} /></Field>
+            <Field label="Alternative POC contact"><input className="text-input" type="tel" inputMode="tel" placeholder="Alternative contact number" value={form.alternative_poc_contact} onChange={(event) => setField('alternative_poc_contact', event.target.value)} /></Field>
             <Field label="Beat no."><input className="text-input" placeholder="e.g. 01, B01, BEAT-05" value={form.beat_no} onChange={(event) => setField('beat_no', event.target.value)} /></Field>
             <Field label="Current purchase"><input className="text-input" placeholder="e.g. Local supplier, Own plant" value={form.current_purchase} onChange={(event) => setField('current_purchase', event.target.value)} /></Field>
             <Field label="Required litres per month"><div className="input-suffix"><input className="text-input" type="number" min="0" step="any" placeholder="e.g. 1250.5" value={form.required_litres_per_month} onChange={(event) => setField('required_litres_per_month', event.target.value)} /><span>litres</span></div></Field>
@@ -1307,6 +1328,8 @@ function CustomerDetail({
       fields: [
         ['POC (Point of Contact)', customer.poc_name],
         ['Contact number', customer.contact_number],
+        ['Alternative POC', customer.alternative_poc_name],
+        ['Alternative POC contact', customer.alternative_poc_contact],
         ['Beat no.', customer.beat_no],
         ['Current purchase', customer.current_purchase],
         ['Required litres per month', customer.required_litres_per_month],

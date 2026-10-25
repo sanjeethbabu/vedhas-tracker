@@ -1,14 +1,7 @@
 -- Run this in the Supabase SQL Editor for your project.
--- DESTRUCTIVE RESET: this removes all customer records and employee profiles.
--- Supabase Auth users and passwords are not deleted; recreate their profiles after the schema runs.
+-- Safe to re-run: existing customer records, profiles, and Auth users are preserved.
+-- This script does not drop tables, truncate tables, or delete rows.
 drop trigger if exists create_employee_profile_after_auth_signup on auth.users;
-drop table if exists public.customers;
-drop table if exists public.employee_invites;
-drop table if exists public.profiles;
-drop function if exists public.create_employee_profile_for_auth_user();
-drop function if exists public.set_customer_updated_at();
-drop function if exists public.is_admin();
-drop function if exists public.is_employee();
 
 create table if not exists public.profiles (
   user_id uuid primary key references auth.users (id) on delete cascade,
@@ -124,7 +117,8 @@ create table if not exists public.customers (
       'Colleges',
       'Café & Restaurants',
       'IT Parks & Offices',
-      'Showrooms',
+      'Showrooms & services',
+      'Institute',
       'Fun Parks',
       'Clubs',
       'Others'
@@ -133,6 +127,8 @@ create table if not exists public.customers (
   other_sector text,
   poc_name text,
   contact_number text,
+  alternative_poc_name text,
+  alternative_poc_contact text,
   beat_no text,
   area text,
   city text,
@@ -152,6 +148,10 @@ create table if not exists public.customers (
     sector <> 'Others' or nullif(trim(other_sector), '') is not null
   )
 );
+
+alter table public.customers
+  add column if not exists alternative_poc_name text,
+  add column if not exists alternative_poc_contact text;
 
 create index if not exists customers_user_id_serial_number_idx
   on public.customers (user_id, serial_number desc);

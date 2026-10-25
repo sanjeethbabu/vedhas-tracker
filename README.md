@@ -14,7 +14,7 @@ A mobile-first customer tracker for sales employees and read-only sales reportin
 ## Supabase setup
 
 1. Install Node.js 20.19+ or 22.12+.
-2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). **This script first drops and recreates the app tables**, permanently deleting all customer records, employee profiles, and pending employee invitations. Supabase Auth users and passwords are not deleted, but their profiles must be reinserted before they can use the app. Do not rerun this reset on a live database unless you intend to erase that app data. The script creates the profiles/customers tables, role helpers, triggers, and row-level policies.
+2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). It safely creates or updates the app tables, role helpers, triggers, and row-level policies without deleting existing customer records or profiles. It includes the alternative POC fields.
 3. Create the first administrator:
    1. In **Authentication → Users**, add a confirmed user with email `admin001@accounts.vedhas.local` and a secure password.
    2. Copy that auth user's UUID.

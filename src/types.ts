@@ -5,7 +5,8 @@ export const sectors = [
   'Colleges',
   'Café & Restaurants',
   'IT Parks & Offices',
-  'Showrooms',
+  'Showrooms & services',
+  'Institute',
   'Fun Parks',
   'Clubs',
   'Others',
@@ -22,6 +23,8 @@ export interface Customer {
   other_sector: string | null
   poc_name: string | null
   contact_number: string | null
+  alternative_poc_name: string | null
+  alternative_poc_contact: string | null
   beat_no: string | null
   area: string | null
   city: string | null
