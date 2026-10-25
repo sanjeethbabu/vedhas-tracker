@@ -368,6 +368,8 @@ export default function App() {
   }, [])
 
   const exportCustomersAsCsv = useCallback(() => {
+    if (!isAdmin) return
+
     if (!customers.length) {
       notify('There are no customer records to export.', 'info')
       return
@@ -1101,7 +1103,7 @@ function Dashboard({
         </div>
         <div className="welcome-actions">
           <button className="button button-outline" onClick={onCustomers}><Icon name="users" size={16} /> View customers</button>
-          <button className="button button-outline" onClick={onExportCsv}><Icon name="arrow" size={16} /> Export CSV</button>
+          {admin && <button className="button button-outline" onClick={onExportCsv}><Icon name="arrow" size={16} /> Export CSV</button>}
           <button className="button button-outline update-check-button" onClick={onCheckForUpdates} aria-label="Check for updates" title="Check for updates"><Icon name="refresh" size={16} /><span className="update-check-label">Check updates</span></button>
           {!admin && <button className="button button-primary add-top-button" onClick={onAdd}><Icon name="plus" size={18} /> Add customer</button>}
         </div>
