@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, setRememberSession, supabase } from './supabase'
-import type { Customer, CustomerFormValues, Page, Sector, UserProfile } from './types'
+import type { CountType, Customer, CustomerFormValues, Page, SalesOption, Sector, UserProfile } from './types'
 import { sectors } from './types'
 
 type FormState = {
@@ -13,14 +13,15 @@ type FormState = {
   contact_number: string
   alternative_poc_name: string
   alternative_poc_contact: string
-  beat_no: string
+  beat_name: string
+  approached_for: string
   area: string
   city: string
   location: string
   room_count: string
+  count_type: CountType
   strength: string
   branches: string
-  brands: string
   required_litres_per_month: string
   current_purchase: string
   remarks: string
@@ -36,14 +37,15 @@ const emptyForm: FormState = {
   contact_number: '',
   alternative_poc_name: '',
   alternative_poc_contact: '',
-  beat_no: '',
+  beat_name: '',
+  approached_for: '',
   area: '',
   city: '',
   location: '',
   room_count: '',
+  count_type: 'room',
   strength: '',
   branches: '',
-  brands: '',
   required_litres_per_month: '',
   current_purchase: '',
   remarks: '',
@@ -92,7 +94,7 @@ function Icon({
 }
 
 function Logo({ className = '' }: { className?: string }) {
-  return <img className={`brand-image ${className}`} src="/vedhas-logo.png" alt="Vedhas Chemicals logo" />
+  return <span className={`brand-logo-badge ${className}`}><img className="brand-image" src="/royal-klense-logo.png" alt="Royal Klense logo" /></span>
 }
 
 function formatDate(value: string): string {
@@ -126,14 +128,15 @@ function customerToForm(customer: Customer): FormState {
     contact_number: customer.contact_number ?? '',
     alternative_poc_name: customer.alternative_poc_name ?? '',
     alternative_poc_contact: customer.alternative_poc_contact ?? '',
-    beat_no: customer.beat_no ?? '',
+    beat_name: customer.beat_name ?? '',
+    approached_for: customer.approached_for ?? '',
     area: customer.area ?? '',
     city: customer.city ?? '',
     location: customer.location ?? '',
     room_count: customer.room_count ?? '',
+    count_type: customer.count_type ?? 'room',
     strength: customer.strength ?? '',
     branches: customer.branches ?? '',
-    brands: customer.brands ?? '',
     required_litres_per_month:
       customer.required_litres_per_month == null
         ? ''
@@ -152,14 +155,15 @@ function formToCustomer(values: FormState): CustomerFormValues {
     contact_number: values.contact_number.trim() || null,
     alternative_poc_name: values.alternative_poc_name.trim() || null,
     alternative_poc_contact: values.alternative_poc_contact.trim() || null,
-    beat_no: values.beat_no.trim() || null,
+    beat_name: values.beat_name.trim() || null,
+    approached_for: values.approached_for.trim() || null,
     area: values.area.trim() || null,
     city: values.city.trim() || null,
     location: values.location.trim() || null,
     room_count: values.room_count.trim() || null,
+    count_type: values.count_type,
     strength: values.strength.trim() || null,
     branches: values.branches.trim() || null,
-    brands: values.brands.trim() || null,
     required_litres_per_month: values.required_litres_per_month
       ? Number(values.required_litres_per_month)
       : null,
@@ -199,6 +203,9 @@ export default function App() {
   const [splash, setSplash] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [staff, setStaff] = useState<UserProfile[]>([])
+  const [salesOptions, setSalesOptions] = useState<SalesOption[]>([])
+  const [salesOptionsLoading, setSalesOptionsLoading] = useState(false)
+  const [salesOptionsError, setSalesOptionsError] = useState('')
   const [savedCustomer, setSavedCustomer] = useState<Customer | null>(null)
   const [customersLoading, setCustomersLoading] = useState(false)
   const [page, setPage] = useState<Page>('dashboard')
@@ -247,6 +254,47 @@ export default function App() {
       setCustomersLoading(false)
     }
   }, [notify])
+
+  useEffect(() => {
+    let active = true
+    if (!session?.user.id || !profile) {
+      setSalesOptions([])
+      setSalesOptionsError('')
+      setSalesOptionsLoading(false)
+      return
+    }
+    if (!supabase) return
+
+    setSalesOptionsLoading(true)
+    setSalesOptionsError('')
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('sales_options')
+          .select('id, option_type, value')
+          .order('option_type')
+          .order('value')
+        if (!active) return
+        if (error) {
+          setSalesOptionsError('Dropdown options could not be loaded. Ask an administrator to check the database setup.')
+          notify('Dropdown options could not be loaded. Check the database setup and try again.', 'error')
+          return
+        }
+        setSalesOptions(data as SalesOption[])
+      } catch {
+        if (active) {
+          setSalesOptionsError('Dropdown options could not be loaded. Check your connection and try again.')
+          notify('Dropdown options could not be loaded. Check your connection and try again.', 'error')
+        }
+      } finally {
+        if (active) setSalesOptionsLoading(false)
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [session?.user.id, profile, notify])
 
   useEffect(() => {
     const splashTimer = window.setTimeout(() => setSplash(false), 700)
@@ -306,7 +354,7 @@ export default function App() {
             setStaff([])
           }
         } catch {
-          if (active) setProfileError('This account is not set up for Vedhas Tracker. Contact your administrator.')
+          if (active) setProfileError('This account is not set up for Royal Klense Tracker. Contact your administrator.')
         } finally {
           if (active) setProfileLoading(false)
         }
@@ -380,19 +428,19 @@ export default function App() {
       ...(isAdmin ? ['Sales Employee'] : []),
       'Customer Name',
       'Sector',
-      'Other Sector',
-      'POC',
+      'Details',
       'Contact Number',
       'Alternative POC',
       'Alternative POC Contact',
-      'Beat No.',
+      'Beat Name',
+      'Approached For',
       'Area',
       'City',
       'Location',
-      'Room Count',
+      'Count Type',
+      'Count',
       'Strength',
       'Branches',
-      'Brands',
       'Required Litres / Month',
       'Current Purchase',
       'Remarks',
@@ -405,20 +453,20 @@ export default function App() {
         String(customer.serial_number),
         ...(isAdmin ? [employeeName] : []),
         customer.customer_name,
-        customer.sector,
-        customer.other_sector ?? '',
+        sectorLabel(customer),
         customer.poc_name ?? '',
         customer.contact_number ?? '',
         customer.alternative_poc_name ?? '',
         customer.alternative_poc_contact ?? '',
-        customer.beat_no ?? '',
+        customer.beat_name ?? '',
+        customer.approached_for ?? '',
         customer.area ?? '',
         customer.city ?? '',
         customer.location ?? '',
+        customer.count_type,
         customer.room_count ?? '',
         customer.strength ?? '',
         customer.branches ?? '',
-        customer.brands ?? '',
         customer.required_litres_per_month ?? '',
         customer.current_purchase ?? '',
         customer.remarks ?? '',
@@ -497,8 +545,9 @@ export default function App() {
   if (splash || authLoading || (session && profileLoading)) {
     return (
       <div className="splash-screen">
-        <Logo className="splash-logo" />
-        <div className="splash-name">Vedhas <span>Tracker</span></div>
+        <div className="splash-brand">
+          <Logo className="splash-logo" />
+        </div>
         <div className="loader-dots" aria-label="Loading"><i /><i /><i /></div>
         <span className="splash-caption">Preparing your workspace</span>
       </div>
@@ -622,8 +671,9 @@ export default function App() {
   if (!profile) {
     return (
       <div className="splash-screen">
-        <Logo className="splash-logo" />
-        <div className="splash-name">Vedhas <span>Tracker</span></div>
+        <div className="splash-brand">
+          <Logo className="splash-logo" />
+        </div>
         <div className="loader-dots" aria-label="Loading"><i /><i /><i /></div>
         <span className="splash-caption">Preparing your workspace</span>
       </div>
@@ -791,6 +841,7 @@ export default function App() {
               loading={customersLoading}
               onAdd={openAdd}
               onCustomers={() => goTo('customers')}
+              onManageOptions={() => goTo('settings')}
               onExportCsv={exportCustomersAsCsv}
               onCheckForUpdates={() => void checkForUpdates()}
               onOpenCustomer={openCustomer}
@@ -832,6 +883,9 @@ export default function App() {
               form={form}
               editing={editing}
               savedCustomer={savedCustomer}
+              salesOptions={salesOptions}
+              salesOptionsLoading={salesOptionsLoading}
+              salesOptionsError={salesOptionsError}
               loading={submitting}
               error={formError}
               onChange={setForm}
@@ -865,8 +919,18 @@ export default function App() {
               onDelete={deleteCustomer}
             />
           )}
+          {page === 'settings' && isAdmin && (
+            <SalesOptionsAdmin
+              options={salesOptions}
+              loading={salesOptionsLoading}
+              error={salesOptionsError}
+              onOptionsChange={setSalesOptions}
+              onNotify={notify}
+              onBack={() => goTo('dashboard')}
+            />
+          )}
         </main>
-        <footer className="page-footer">Vedhas <strong>Tracker</strong> <span>·</span> Simple customer tracking, thoughtfully done.</footer>
+        <footer className="page-footer">Royal Klense <strong>Tracker</strong> <span>·</span> Simple customer tracking, thoughtfully done.</footer>
       </div>
       {updateDialogOpen && (
         <UpdateDialog
@@ -898,17 +962,17 @@ function UpdateDialog({
   const content = {
     checking: {
       title: 'Checking for updates',
-      description: 'Looking for the latest Vedhas Tracker release.',
+      description: 'Looking for the latest Royal Klense Tracker release.',
       icon: <span className="update-spinner" />,
     },
     available: {
       title: 'New update available',
-      description: 'A newer version of Vedhas Tracker is ready. Update now to load the latest release.',
+      description: 'A newer version of Royal Klense Tracker is ready. Update now to load the latest release.',
       icon: <Icon name="sparkles" size={22} />,
     },
     current: {
       title: "You're up to date",
-      description: 'You already have the latest version of Vedhas Tracker.',
+      description: 'You already have the latest version of Royal Klense Tracker.',
       icon: <Icon name="check" size={22} />,
     },
     error: {
@@ -918,7 +982,7 @@ function UpdateDialog({
     },
     idle: {
       title: 'Check for updates',
-      description: 'Check for the latest version of Vedhas Tracker.',
+      description: 'Check for the latest version of Royal Klense Tracker.',
       icon: <Icon name="refresh" size={22} />,
     },
   }[state]
@@ -932,7 +996,7 @@ function UpdateDialog({
           <Icon name="close" size={18} />
         </button>
         <div className={`update-illustration update-illustration-${state}`}>{content.icon}</div>
-        <span className="update-eyebrow">Vedhas <strong>Tracker</strong></span>
+        <span className="update-eyebrow">Royal Klense <strong>Tracker</strong></span>
         <h2 id="update-title">{content.title}</h2>
         <p id="update-description">{content.description}</p>
         {state === 'available' && <div className="update-version"><span>NEW VERSION</span><strong>{version}</strong></div>}
@@ -998,7 +1062,7 @@ function LoginScreen({
       <section className="login-art">
         <div className="art-glow art-glow-one" /><div className="art-glow art-glow-two" />
         <div className="art-content">
-          <div className="art-brand"><Logo className="login-art-logo" /><span>Vedhas <b>Tracker</b></span></div>
+          <div className="art-brand"><Logo className="login-art-logo" /></div>
           <div className="art-message">
             <div className="eyebrow light-eyebrow"><span /> BUILT FOR YOUR FIELD TEAM</div>
             <h1>Good business<br />starts with<br /><em>good connections.</em></h1>
@@ -1008,11 +1072,11 @@ function LoginScreen({
         </div>
       </section>
       <section className="login-panel">
-        <div className="mobile-login-brand"><Logo className="mobile-login-logo" /><span>Vedhas <b>Tracker</b></span></div>
+        <div className="mobile-login-brand"><Logo className="mobile-login-logo" /></div>
         <form className="login-form" onSubmit={creating ? onCreateAccount : onLogin}>
           <div className="eyebrow"><span /> {creating ? 'EMPLOYEE REGISTRATION' : 'SECURE SIGN IN'}</div>
           <h2>{creating ? 'Create your account' : 'Welcome back'}</h2>
-          <p className="login-intro">{creating ? 'Set up your employee access to Vedhas Tracker.' : 'Sign in with your employee or admin ID.'}</p>
+          <p className="login-intro">{creating ? 'Set up your employee access to Royal Klense Tracker.' : 'Sign in with your employee or admin ID.'}</p>
           {!configured && <div className="config-reminder"><strong>Supabase setup needed</strong><span>Set the project URL and publishable/anon key in <code>public/supabase-config.js</code>, then rebuild and redeploy. For local development, you can also set them in <code>.env</code>.</span></div>}
           {creating && <>
             <label className="field-label login-field-label" htmlFor="create-name">Full name</label>
@@ -1048,6 +1112,7 @@ function pageTitle(page: Page, editing: boolean, admin: boolean): string {
   if (page === 'customers') return admin ? 'Reports' : 'My customers'
   if (page === 'add') return editing ? 'Edit customer' : 'Add customer'
   if (page === 'detail') return 'Customer details'
+  if (page === 'settings') return 'Sales options'
   return 'Overview'
 }
 
@@ -1060,6 +1125,7 @@ function Dashboard({
   loading,
   onAdd,
   onCustomers,
+  onManageOptions,
   onExportCsv,
   onCheckForUpdates,
   onOpenCustomer,
@@ -1072,6 +1138,7 @@ function Dashboard({
   loading: boolean
   onAdd: () => void
   onCustomers: () => void
+  onManageOptions: () => void
   onExportCsv: () => void
   onCheckForUpdates: () => void
   onOpenCustomer: (customer: Customer) => void
@@ -1102,8 +1169,9 @@ function Dashboard({
           <p className="page-subtitle">{admin ? 'An overview of customer activity across your sales team.' : 'A clear view of your customer relationships, all in one place.'}</p>
         </div>
         <div className="welcome-actions">
-          <button className="button button-outline" onClick={onCustomers}><Icon name="users" size={16} /> View customers</button>
-          {admin && <button className="button button-outline" onClick={onExportCsv}><Icon name="arrow" size={16} /> Export CSV</button>}
+          <button className="button button-outline dashboard-action-button" onClick={onCustomers} aria-label="View customers" title="View customers"><Icon name="users" size={16} /><span className="dashboard-action-label">View customers</span></button>
+          {admin && <button className="button button-outline dashboard-action-button" onClick={onManageOptions} aria-label="Manage sales options" title="Manage sales options"><Icon name="edit" size={16} /><span className="dashboard-action-label">Manage sales options</span></button>}
+          {admin && <button className="button button-outline dashboard-action-button" onClick={onExportCsv} aria-label="Export CSV" title="Export CSV"><Icon name="arrow" size={16} /><span className="dashboard-action-label">Export CSV</span></button>}
           <button className="button button-outline update-check-button" onClick={onCheckForUpdates} aria-label="Check for updates" title="Check for updates"><Icon name="refresh" size={16} /><span className="update-check-label">Check updates</span></button>
           {!admin && <button className="button button-primary add-top-button" onClick={onAdd}><Icon name="plus" size={18} /> Add customer</button>}
         </div>
@@ -1250,7 +1318,7 @@ function CustomerList({
         ) : (
           <>
             <div className="table-scroll"><table className="customer-table">
-              <thead><tr><th>S.NO.</th>{admin && <th>SALES EMPLOYEE</th>}<th>CUSTOMER NAME</th><th>SECTOR</th><th>POC</th><th>CONTACT NUMBER</th><th>ALTERNATIVE POC</th><th>ALTERNATIVE POC CONTACT</th><th>BEAT NO</th><th>AREA</th><th>CITY</th><th>LOCATION</th><th>ROOM COUNT</th><th>STRENGTH</th><th>BRANCHES</th><th>BRANDS</th><th>LITRES / MONTH</th><th>CURRENT PURCHASE</th><th>REMARKS</th><th aria-label="Open" /></tr></thead>
+              <thead><tr><th>S.NO.</th>{admin && <th>SALES EMPLOYEE</th>}<th>CUSTOMER NAME</th><th>SECTOR</th><th>DETAILS</th><th>CONTACT NUMBER</th><th>ALTERNATIVE POC</th><th>ALTERNATIVE POC CONTACT</th><th>BEAT NAME</th><th>APPROACHED FOR</th><th>AREA</th><th>CITY</th><th>LOCATION</th><th>ROOM / FLOOR COUNT</th><th>STRENGTH</th><th>BRANCHES</th><th>LITRES / MONTH</th><th>CURRENT PURCHASE</th><th>REMARKS</th><th aria-label="Open" /></tr></thead>
               <tbody>{customers.map((customer) => (
                 <tr key={customer.id} onClick={() => onOpenCustomer(customer)}>
                   <td><span className="serial-pill">{customer.serial_number}</span></td>
@@ -1261,14 +1329,14 @@ function CustomerList({
                   <td>{customer.contact_number || <span className="muted-dash">—</span>}</td>
                   <td>{customer.alternative_poc_name || <span className="muted-dash">—</span>}</td>
                   <td>{customer.alternative_poc_contact || <span className="muted-dash">—</span>}</td>
-                  <td>{customer.beat_no || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.beat_name || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.approached_for || <span className="muted-dash">—</span>}</td>
                   <td>{customer.area || <span className="muted-dash">—</span>}</td>
                   <td>{customer.city || <span className="muted-dash">—</span>}</td>
                   <td className="table-truncate" title={customer.location ?? ''}>{customer.location || <span className="muted-dash">—</span>}</td>
-                  <td>{customer.room_count || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.room_count ? `${customer.count_type === 'floor' ? 'Floor' : 'Room'}: ${customer.room_count}` : <span className="muted-dash">—</span>}</td>
                   <td>{customer.strength || <span className="muted-dash">—</span>}</td>
                   <td>{customer.branches || <span className="muted-dash">—</span>}</td>
-                  <td>{customer.brands || <span className="muted-dash">—</span>}</td>
                   <td>{customer.required_litres_per_month ?? <span className="muted-dash">—</span>}</td>
                   <td className="table-truncate" title={customer.current_purchase ?? ''}>{customer.current_purchase || <span className="muted-dash">—</span>}</td>
                   <td className="table-truncate" title={customer.remarks ?? ''}>{customer.remarks || <span className="muted-dash">—</span>}</td>
@@ -1294,6 +1362,9 @@ function CustomerForm({
   form,
   editing,
   savedCustomer,
+  salesOptions,
+  salesOptionsLoading,
+  salesOptionsError,
   loading,
   error,
   onChange,
@@ -1305,6 +1376,9 @@ function CustomerForm({
   form: FormState
   editing: boolean
   savedCustomer: Customer | null
+  salesOptions: SalesOption[]
+  salesOptionsLoading: boolean
+  salesOptionsError: string
   loading: boolean
   error: string
   onChange: (form: FormState) => void
@@ -1313,7 +1387,14 @@ function CustomerForm({
   onAddAnother: () => void
   onViewCustomer: () => void
 }) {
-  const setField = (key: keyof FormState, value: string) => onChange({ ...form, [key]: value })
+  const setField = (key: Exclude<keyof FormState, 'count_type'>, value: string) => onChange({ ...form, [key]: value })
+  const optionValues = (optionType: SalesOption['option_type'], selected: string) => {
+    const values = salesOptions
+      .filter((option) => option.option_type === optionType)
+      .map((option) => option.value)
+    if (selected && !values.includes(selected)) values.push(selected)
+    return values
+  }
   const [locationLoading, setLocationLoading] = useState(false)
   const [locationMessage, setLocationMessage] = useState('')
 
@@ -1368,43 +1449,54 @@ function CustomerForm({
         <section className="form-section">
           <div className="form-section-heading"><span className="form-step">01</span><div><h2>Business details</h2><p>Who are you visiting?</p></div></div>
           <div className="form-grid">
-            <Field label="Customer name" required wide><input autoFocus className="text-input" placeholder="e.g. The Grand Vedhas" value={form.customer_name} onChange={(event) => setField('customer_name', event.target.value)} /></Field>
-            <Field label="Sector" required><select className="text-input select-input" value={form.sector} onChange={(event) => setField('sector', event.target.value)}><option value="">Select a sector</option>{sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}</select></Field>
-            {form.sector === 'Others' && <Field label="Other sector" required><input className="text-input" placeholder="Enter sector name" value={form.other_sector} onChange={(event) => setField('other_sector', event.target.value)} /></Field>}
-            <Field label="Room count"><input className="text-input" placeholder="e.g. 50, 100+, NA" value={form.room_count} onChange={(event) => setField('room_count', event.target.value)} /></Field>
+            <Field label="Customer name" required wide><input autoFocus required className="text-input" placeholder="e.g. Royal Klense Hotel" value={form.customer_name} onChange={(event) => setField('customer_name', event.target.value)} /></Field>
+            <Field label="Sector" required><select required className="text-input select-input" value={form.sector} onChange={(event) => setField('sector', event.target.value)}><option value="">Select a sector</option>{sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}</select></Field>
+            {form.sector === 'Others' && <Field label="Other sector" required><input required className="text-input" placeholder="Enter sector name" value={form.other_sector} onChange={(event) => setField('other_sector', event.target.value)} /></Field>}
+            <div className="form-field">
+              <span className="field-label">Count type <span className="required-star"> *</span></span>
+              <div className="count-type-options" role="radiogroup" aria-label="Count type">
+                <label><input type="radio" name="count-type" value="room" checked={form.count_type === 'room'} onChange={() => onChange({ ...form, count_type: 'room' })} /> Room count</label>
+                <label><input type="radio" name="count-type" value="floor" checked={form.count_type === 'floor'} onChange={() => onChange({ ...form, count_type: 'floor' })} /> Floor count</label>
+              </div>
+            </div>
+            <Field label={`${form.count_type === 'floor' ? 'Floor' : 'Room'} count`} required><input required className="text-input" placeholder={form.count_type === 'floor' ? 'Enter floor count' : 'Enter room count'} value={form.room_count} onChange={(event) => setField('room_count', event.target.value)} /></Field>
             <Field label="Strength"><input className="text-input" placeholder="e.g. 500, 250 students" value={form.strength} onChange={(event) => setField('strength', event.target.value)} /></Field>
-            <Field label="Branches"><input className="text-input" placeholder="e.g. 1, 5, Multiple branches" value={form.branches} onChange={(event) => setField('branches', event.target.value)} /></Field>
-            <Field label="Brands currently used"><input className="text-input" placeholder="e.g. Bisleri, Kinley" value={form.brands} onChange={(event) => setField('brands', event.target.value)} /></Field>
+            <Field label="Branches" required><input required className="text-input" placeholder="e.g. 1, 5, Multiple branches" value={form.branches} onChange={(event) => setField('branches', event.target.value)} /></Field>
           </div>
         </section>
         <section className="form-section">
-          <div className="form-section-heading"><span className="form-step">02</span><div><h2>Point of contact</h2><p>Who should your team speak with?</p></div></div>
+          <div className="form-section-heading"><span className="form-step">02</span><div><h2>Details</h2><p>Who should your team speak with?</p></div></div>
           <div className="form-grid">
-            <Field label="POC (Point of Contact)"><input className="text-input" placeholder="Contact person's name" value={form.poc_name} onChange={(event) => setField('poc_name', event.target.value)} /></Field>
-            <Field label="Contact number"><input className="text-input" type="tel" inputMode="tel" placeholder="Include area code if needed" value={form.contact_number} onChange={(event) => setField('contact_number', event.target.value)} /></Field>
+            <Field label="Details" required><input required className="text-input" placeholder="Point of contact name" value={form.poc_name} onChange={(event) => setField('poc_name', event.target.value)} /></Field>
+            <Field label="Contact number" required><input required className="text-input" type="tel" inputMode="tel" placeholder="Include area code if needed" value={form.contact_number} onChange={(event) => setField('contact_number', event.target.value)} /></Field>
             <Field label="Alternative POC"><input className="text-input" placeholder="Alternative contact person's name" value={form.alternative_poc_name} onChange={(event) => setField('alternative_poc_name', event.target.value)} /></Field>
             <Field label="Alternative POC contact"><input className="text-input" type="tel" inputMode="tel" placeholder="Alternative contact number" value={form.alternative_poc_contact} onChange={(event) => setField('alternative_poc_contact', event.target.value)} /></Field>
-            <Field label="Beat no."><input className="text-input" placeholder="e.g. 01, B01, BEAT-05" value={form.beat_no} onChange={(event) => setField('beat_no', event.target.value)} /></Field>
-            <Field label="Current purchase"><input className="text-input" placeholder="e.g. Local supplier, Own plant" value={form.current_purchase} onChange={(event) => setField('current_purchase', event.target.value)} /></Field>
-            <Field label="Required litres per month"><div className="input-suffix"><input className="text-input" type="number" min="0" step="any" placeholder="e.g. 1250.5" value={form.required_litres_per_month} onChange={(event) => setField('required_litres_per_month', event.target.value)} /><span>litres</span></div></Field>
+            <Field label="Beat name" required><select required className="text-input select-input" value={form.beat_name} onChange={(event) => setField('beat_name', event.target.value)} disabled={salesOptionsLoading || Boolean(salesOptionsError)}><option value="">{salesOptionsLoading ? 'Loading beat names…' : 'Select a beat name'}</option>{optionValues('beat_name', form.beat_name).map((value) => <option key={value} value={value}>{value}</option>)}</select></Field>
+            <Field label="Approached for" required><select required className="text-input select-input" value={form.approached_for} onChange={(event) => setField('approached_for', event.target.value)} disabled={salesOptionsLoading || Boolean(salesOptionsError)}><option value="">{salesOptionsLoading ? 'Loading options…' : 'Select an option'}</option>{optionValues('approached_for', form.approached_for).map((value) => <option key={value} value={value}>{value}</option>)}</select></Field>
+            <Field label="Current purchase" required><input required className="text-input" placeholder="e.g. Local supplier, Own plant" value={form.current_purchase} onChange={(event) => setField('current_purchase', event.target.value)} /></Field>
+            <Field label="Required litres per month" required><div className="input-suffix"><input required className="text-input" type="number" min="0" step="any" placeholder="e.g. 1250.5" value={form.required_litres_per_month} onChange={(event) => setField('required_litres_per_month', event.target.value)} /><span>litres</span></div></Field>
           </div>
+          {salesOptionsError && <div className="form-alert form-alert-wide" role="alert">{salesOptionsError}</div>}
+          {!salesOptionsLoading && !salesOptionsError && (!optionValues('beat_name', form.beat_name).length || !optionValues('approached_for', form.approached_for).length) && (
+            <div className="field-hint options-required-hint">An administrator must add at least one beat name and one approached-for option before this form can be submitted.</div>
+          )}
         </section>
         <section className="form-section">
           <div className="form-section-heading"><span className="form-step">03</span><div><h2>Location & notes</h2><p>Make this visit easy to find later.</p></div></div>
           <div className="form-grid">
-            <Field label="Area"><input className="text-input" placeholder="e.g. Indiranagar" value={form.area} onChange={(event) => setField('area', event.target.value)} /></Field>
-            <Field label="City"><input className="text-input" placeholder="e.g. Bengaluru" value={form.city} onChange={(event) => setField('city', event.target.value)} /></Field>
+            <Field label="Area" required><input required className="text-input" placeholder="e.g. Indiranagar" value={form.area} onChange={(event) => setField('area', event.target.value)} /></Field>
+            <Field label="City" required><input required className="text-input" placeholder="e.g. Bengaluru" value={form.city} onChange={(event) => setField('city', event.target.value)} /></Field>
             <div className="form-field field-wide">
-              <span className="field-label">Location / address</span>
+              <span className="field-label">Location / address <span className="required-star"> *</span></span>
               <div className="location-input-row">
-                <input className="text-input" placeholder="Street, landmark, building or coordinates…" value={form.location} onChange={(event) => setField('location', event.target.value)} />
+                <input required className="text-input" placeholder="Street, landmark, building or coordinates…" value={form.location} onChange={(event) => setField('location', event.target.value)} />
                 <button className="button button-outline location-button" type="button" onClick={useCurrentLocation} disabled={locationLoading}>
                   <Icon name="location" size={16} /> {locationLoading ? 'Getting location…' : 'Use current location'}
                 </button>
               </div>
               {locationMessage && <span className="field-hint" role="status" aria-live="polite">{locationMessage}</span>}
             </div>
-            <Field label="Remarks" wide><textarea className="text-input textarea-input" rows={4} placeholder="Add useful observations for your next visit…" value={form.remarks} onChange={(event) => setField('remarks', event.target.value)} /></Field>
+            <Field label="Remarks" required wide><textarea required className="text-input textarea-input" rows={4} placeholder="Add useful observations for your next visit…" value={form.remarks} onChange={(event) => setField('remarks', event.target.value)} /></Field>
           </div>
         </section>
         {error && <div className="form-alert form-alert-wide" role="alert">{error}</div>}
@@ -1429,6 +1521,178 @@ function Field({
   return <label className={`form-field ${wide ? 'field-wide' : ''}`}><span className="field-label">{label}{required && <span className="required-star"> *</span>}</span>{children}</label>
 }
 
+function SalesOptionsAdmin({
+  options,
+  loading,
+  error,
+  onOptionsChange,
+  onNotify,
+  onBack,
+}: {
+  options: SalesOption[]
+  loading: boolean
+  error: string
+  onOptionsChange: (options: SalesOption[]) => void
+  onNotify: (text: string, kind?: NonNullable<Notice>['kind']) => void
+  onBack: () => void
+}) {
+  const [drafts, setDrafts] = useState<Record<SalesOption['option_type'], string>>({
+    beat_name: '',
+    approached_for: '',
+  })
+  const [editingId, setEditingId] = useState('')
+  const [editingValue, setEditingValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const groupOptions = (type: SalesOption['option_type']) =>
+    options.filter((option) => option.option_type === type)
+
+  const hasDuplicate = (type: SalesOption['option_type'], value: string, exceptId = '') =>
+    groupOptions(type).some((option) =>
+      option.id !== exceptId && option.value.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase(),
+    )
+
+  const addOption = async (type: SalesOption['option_type']) => {
+    const value = drafts[type].trim()
+    if (!value) return
+    if (hasDuplicate(type, value)) {
+      onNotify('That option already exists.', 'error')
+      return
+    }
+    if (!supabase) {
+      onNotify('Supabase is not configured.', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('sales_options')
+        .insert({ option_type: type, value })
+        .select('id, option_type, value')
+        .single()
+      if (error || !data) {
+        onNotify(error?.message ?? 'The option could not be added.', 'error')
+        return
+      }
+      onOptionsChange([...options, data as SalesOption].sort((a, b) =>
+        a.option_type.localeCompare(b.option_type) || a.value.localeCompare(b.value),
+      ))
+      setDrafts((current) => ({ ...current, [type]: '' }))
+      onNotify('Option added.')
+    } catch {
+      onNotify('The option could not be added. Check your connection and try again.', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveOption = async (option: SalesOption) => {
+    const value = editingValue.trim()
+    if (!value) return
+    if (hasDuplicate(option.option_type, value, option.id)) {
+      onNotify('That option already exists.', 'error')
+      return
+    }
+    if (!supabase) {
+      onNotify('Supabase is not configured.', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('sales_options')
+        .update({ value })
+        .eq('id', option.id)
+        .select('id, option_type, value')
+        .single()
+      if (error || !data) {
+        onNotify(error?.message ?? 'The option could not be updated.', 'error')
+        return
+      }
+      onOptionsChange(options.map((item) => item.id === option.id ? data as SalesOption : item)
+        .sort((a, b) => a.option_type.localeCompare(b.option_type) || a.value.localeCompare(b.value)))
+      setEditingId('')
+      setEditingValue('')
+      onNotify('Option updated.')
+    } catch {
+      onNotify('The option could not be updated. Check your connection and try again.', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteOption = async (option: SalesOption) => {
+    if (!window.confirm(`Delete "${option.value}"? Existing customer records keep their saved value.`)) return
+    if (!supabase) {
+      onNotify('Supabase is not configured.', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      const { error } = await supabase.from('sales_options').delete().eq('id', option.id)
+      if (error) {
+        onNotify(error.message, 'error')
+        return
+      }
+      onOptionsChange(options.filter((item) => item.id !== option.id))
+      if (editingId === option.id) setEditingId('')
+      onNotify('Option deleted.')
+    } catch {
+      onNotify('The option could not be deleted. Check your connection and try again.', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const renderGroup = (type: SalesOption['option_type'], title: string, description: string) => (
+    <section className="option-manager-card" key={type}>
+      <div className="option-manager-heading"><div><h2>{title}</h2><p>{description}</p></div><span>{groupOptions(type).length} options</span></div>
+      <form className="option-add-row" onSubmit={(event) => { event.preventDefault(); void addOption(type) }}>
+        <input className="text-input" aria-label={`New ${title.toLocaleLowerCase()}`} placeholder={`Add ${title.toLocaleLowerCase()}`} value={drafts[type]} onChange={(event) => setDrafts((current) => ({ ...current, [type]: event.target.value }))} required />
+        <button className="button button-primary" type="submit" disabled={saving}><Icon name="plus" size={16} /> Add</button>
+      </form>
+      {loading ? <div className="option-loading"><span className="button-spinner" /> Loading options…</div> : groupOptions(type).length === 0 ? (
+        <p className="option-empty">No options yet. Add one above so employees can select it in the customer form.</p>
+      ) : (
+        <ul className="option-list">{groupOptions(type).map((option) => (
+          <li key={option.id}>
+            {editingId === option.id ? (
+              <form className="option-edit-row" onSubmit={(event) => { event.preventDefault(); void saveOption(option) }}>
+                <input className="text-input" aria-label={`Edit ${option.value}`} value={editingValue} onChange={(event) => setEditingValue(event.target.value)} required autoFocus />
+                <button className="button button-primary" type="submit" disabled={saving}>Save</button>
+                <button className="button button-outline" type="button" onClick={() => setEditingId('')} disabled={saving}>Cancel</button>
+              </form>
+            ) : (
+              <>
+                <span>{option.value}</span>
+                <div className="option-row-actions">
+                  <button className="icon-button" type="button" aria-label={`Edit ${option.value}`} title="Edit" onClick={() => { setEditingId(option.id); setEditingValue(option.value) }} disabled={saving}><Icon name="edit" size={15} /></button>
+                  <button className="icon-button" type="button" aria-label={`Delete ${option.value}`} title="Delete" onClick={() => void deleteOption(option)} disabled={saving}><Icon name="trash" size={15} /></button>
+                </div>
+              </>
+            )}
+          </li>
+        ))}</ul>
+      )}
+    </section>
+  )
+
+  return (
+    <div className="settings-page">
+      <button className="back-link" onClick={onBack}><Icon name="arrow" size={16} /> Back to overview</button>
+      <div className="page-heading-row">
+        <div><div className="eyebrow"><span /> ADMIN SETTINGS</div><h1>Sales form options</h1><p className="page-subtitle">Manage the beat names and approached-for choices available to employees.</p></div>
+      </div>
+      {error && <div className="form-alert form-alert-wide" role="alert">{error}</div>}
+      <div className="option-manager-grid">
+        {renderGroup('beat_name', 'Beat names', 'Employees choose one of these beat names for each customer.')}
+        {renderGroup('approached_for', 'Approached for', 'Employees choose what the customer was approached for.')}
+      </div>
+      <p className="option-admin-note">Changes are saved immediately. Deleting or renaming an option does not change values already saved on customer records.</p>
+    </div>
+  )
+}
+
 function CustomerDetail({
   customer,
   readOnly,
@@ -1449,20 +1713,20 @@ function CustomerDetail({
       title: 'Business details',
       fields: [
         ['Sector', sectorLabel(customer)],
-        ['Room count', customer.room_count],
+        [customer.count_type === 'floor' ? 'Floor count' : 'Room count', customer.room_count],
         ['Strength', customer.strength],
         ['Branches', customer.branches],
-        ['Brands', customer.brands],
       ],
     },
     {
-      title: 'Point of contact',
+      title: 'Details',
       fields: [
-        ['POC (Point of Contact)', customer.poc_name],
+        ['Details', customer.poc_name],
         ['Contact number', customer.contact_number],
         ['Alternative POC', customer.alternative_poc_name],
         ['Alternative POC contact', customer.alternative_poc_contact],
-        ['Beat no.', customer.beat_no],
+        ['Beat name', customer.beat_name],
+        ['Approached for', customer.approached_for],
         ['Current purchase', customer.current_purchase],
         ['Required litres per month', customer.required_litres_per_month],
       ],

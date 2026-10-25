@@ -13,6 +13,13 @@ export const sectors = [
 ] as const
 
 export type Sector = (typeof sectors)[number]
+export type CountType = 'room' | 'floor'
+
+export interface SalesOption {
+  id: string
+  option_type: 'beat_name' | 'approached_for'
+  value: string
+}
 
 export interface Customer {
   id: string
@@ -25,14 +32,15 @@ export interface Customer {
   contact_number: string | null
   alternative_poc_name: string | null
   alternative_poc_contact: string | null
-  beat_no: string | null
+  beat_name: string | null
+  approached_for: string | null
   area: string | null
   city: string | null
   location: string | null
   room_count: string | null
+  count_type: CountType
   strength: string | null
   branches: string | null
-  brands: string | null
   required_litres_per_month: number | null
   current_purchase: string | null
   remarks: string | null
@@ -53,4 +61,4 @@ export type CustomerFormValues = Omit<
   'id' | 'serial_number' | 'user_id' | 'created_at' | 'updated_at'
 >
 
-export type Page = 'dashboard' | 'customers' | 'add' | 'detail'
+export type Page = 'dashboard' | 'customers' | 'add' | 'detail' | 'settings'

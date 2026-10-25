@@ -1,4 +1,4 @@
-# Vedhas Tracker
+# Royal Klense Tracker
 
 A mobile-first customer tracker for sales employees and read-only sales reporting for administrators.
 
@@ -14,7 +14,7 @@ A mobile-first customer tracker for sales employees and read-only sales reportin
 ## Supabase setup
 
 1. Install Node.js 20.19+ or 22.12+.
-2. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). It safely creates or updates the app tables, role helpers, triggers, and row-level policies without deleting existing customer records or profiles. It includes the alternative POC fields.
+2. For a new database, run [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor. It safely creates or updates the app tables, role helpers, triggers, and row-level policies without deleting existing customer records or profiles. For an existing installation, run [`supabase/customer-form-options.sql`](./supabase/customer-form-options.sql) to add the room/floor count selector, beat and approached-for fields, and admin-managed sales options. Existing beat numbers are migrated into beat names and options, then the legacy `beat_no` column is removed; customer records are preserved.
 3. Create the first administrator:
    1. In **Authentication → Users**, add a confirmed user with email `admin001@accounts.vedhas.local` and a secure password.
    2. Copy that auth user's UUID.
@@ -52,7 +52,7 @@ If you already have data from an earlier email-based deployment, do not create r
 
 ## Reports and navigation
 
-The app uses a single overview with the full customer/organisation list and an Add Customer button; there are no Quick Actions cards, sidebar, or CSV export. Admin reports can be filtered by a custom inclusive date range using the submission date.
+The app uses a single overview with the full customer/organisation list and an Add Customer button. Admins can manage the beat-name and approached-for dropdown choices from **Manage sales options** and export customer reports as CSV. Admin reports can be filtered by a custom inclusive date range using the submission date. Employees select either room count or floor count when entering customers.
 
 ## Build
 

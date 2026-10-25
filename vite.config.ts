@@ -9,7 +9,7 @@ const buildVersion = `${packageJson.version}-${Date.now().toString(36)}`
 
 function updateVersionPlugin(): Plugin {
   return {
-    name: 'vedhas-update-version',
+    name: 'royal-klense-update-version',
     configureServer(server) {
       server.middlewares.use('/version.json', (_request, response) => {
         response.setHeader('Content-Type', 'application/json')
