@@ -331,6 +331,17 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [updateDialogOpen, updateCheckState])
 
+  const cities = useMemo(
+    () =>
+      [...new Set(customers.map((customer) => customer.city?.trim()).filter(Boolean) as string[])]
+        .sort((a, b) => a.localeCompare(b)),
+    [customers],
+  )
+  const staffNames = useMemo(
+    () => new Map(staff.map((person) => [person.user_id, `${person.full_name} (${person.employee_id})`])),
+    [staff],
+  )
+
   const checkForUpdates = useCallback(async (showChecking = true) => {
     if (showChecking) {
       setUpdateDialogOpen(true)
@@ -355,20 +366,84 @@ export default function App() {
     }
   }, [])
 
+  const exportCustomersAsCsv = useCallback(() => {
+    if (!customers.length) {
+      notify('There are no customer records to export.', 'info')
+      return
+    }
+
+    const headers = [
+      'S.No.',
+      ...(isAdmin ? ['Sales Employee'] : []),
+      'Customer Name',
+      'Sector',
+      'Other Sector',
+      'POC',
+      'Contact Number',
+      'Alternative POC',
+      'Alternative POC Contact',
+      'Beat No.',
+      'Area',
+      'City',
+      'Location',
+      'Room Count',
+      'Strength',
+      'Branches',
+      'Brands',
+      'Required Litres / Month',
+      'Current Purchase',
+      'Remarks',
+      'Created At',
+    ]
+
+    const rows = customers.map((customer) => {
+      const employeeName = isAdmin ? (staffNames.get(customer.user_id) ?? '') : ''
+      return [
+        String(customer.serial_number),
+        ...(isAdmin ? [employeeName] : []),
+        customer.customer_name,
+        customer.sector,
+        customer.other_sector ?? '',
+        customer.poc_name ?? '',
+        customer.contact_number ?? '',
+        customer.alternative_poc_name ?? '',
+        customer.alternative_poc_contact ?? '',
+        customer.beat_no ?? '',
+        customer.area ?? '',
+        customer.city ?? '',
+        customer.location ?? '',
+        customer.room_count ?? '',
+        customer.strength ?? '',
+        customer.branches ?? '',
+        customer.brands ?? '',
+        customer.required_litres_per_month ?? '',
+        customer.current_purchase ?? '',
+        customer.remarks ?? '',
+        customer.created_at,
+      ]
+    })
+
+    const csvRows = [headers, ...rows].map((row) => row.map((value) => {
+      const text = String(value ?? '').replace(/\r?\n/g, ' ')
+      return `"${text.replace(/"/g, '""')}"`
+    }).join(',')).join('\n')
+
+    const blob = new Blob([csvRows], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const fileName = isAdmin ? 'vedhas-all-customers' : 'vedhas-my-customers'
+    link.download = `${fileName}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    notify('Customer export downloaded.')
+  }, [customers, isAdmin, notify, staffNames])
+
   useEffect(() => {
     void checkForUpdates(false)
   }, [checkForUpdates])
-
-  const cities = useMemo(
-    () =>
-      [...new Set(customers.map((customer) => customer.city?.trim()).filter(Boolean) as string[])]
-        .sort((a, b) => a.localeCompare(b)),
-    [customers],
-  )
-  const staffNames = useMemo(
-    () => new Map(staff.map((person) => [person.user_id, `${person.full_name} (${person.employee_id})`])),
-    [staff],
-  )
 
   const filteredCustomers = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
@@ -713,6 +788,7 @@ export default function App() {
               loading={customersLoading}
               onAdd={openAdd}
               onCustomers={() => goTo('customers')}
+              onExportCsv={exportCustomersAsCsv}
               onCheckForUpdates={() => void checkForUpdates()}
               onOpenCustomer={openCustomer}
             />
@@ -981,6 +1057,7 @@ function Dashboard({
   loading,
   onAdd,
   onCustomers,
+  onExportCsv,
   onCheckForUpdates,
   onOpenCustomer,
 }: {
@@ -992,6 +1069,7 @@ function Dashboard({
   loading: boolean
   onAdd: () => void
   onCustomers: () => void
+  onExportCsv: () => void
   onCheckForUpdates: () => void
   onOpenCustomer: (customer: Customer) => void
 }) {
@@ -1021,6 +1099,8 @@ function Dashboard({
           <p className="page-subtitle">{admin ? 'An overview of customer activity across your sales team.' : 'A clear view of your customer relationships, all in one place.'}</p>
         </div>
         <div className="welcome-actions">
+          <button className="button button-outline" onClick={onCustomers}><Icon name="users" size={16} /> View customers</button>
+          <button className="button button-outline" onClick={onExportCsv}><Icon name="arrow" size={16} /> Export CSV</button>
           <button className="button button-outline update-check-button" onClick={onCheckForUpdates} aria-label="Check for updates" title="Check for updates"><Icon name="refresh" size={16} /><span className="update-check-label">Check updates</span></button>
           {!admin && <button className="button button-primary add-top-button" onClick={onAdd}><Icon name="plus" size={18} /> Add customer</button>}
         </div>
