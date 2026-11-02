@@ -14,10 +14,12 @@ export const sectors = [
 
 export type Sector = (typeof sectors)[number]
 export type CountType = 'room' | 'floor'
+export type PriorityLevel = 'low' | 'medium' | 'high'
+export type LeadStatus = 'new' | 'hot' | 'warm' | 'cold' | 'converted' | 'lost'
 
 export interface SalesOption {
   id: string
-  option_type: 'beat_name' | 'approached_for'
+  option_type: 'beat_name' | 'approached_for' | 'interested_in'
   value: string
 }
 
@@ -30,10 +32,17 @@ export interface Customer {
   other_sector: string | null
   poc_name: string | null
   contact_number: string | null
+  email: string | null
   alternative_poc_name: string | null
   alternative_poc_contact: string | null
+  main_branch_location: string | null
+  main_branch_contact: string | null
+  main_branch_contact_same_as_primary: boolean | null
   beat_name: string | null
   approached_for: string | null
+  interested_in: string | null
+  priority_level: PriorityLevel | null
+  lead_status: LeadStatus | null
   area: string | null
   city: string | null
   location: string | null
@@ -44,6 +53,7 @@ export interface Customer {
   required_litres_per_month: number | null
   current_purchase: string | null
   remarks: string | null
+  logo_path: string | null
   created_at: string
   updated_at: string
 }
@@ -58,7 +68,13 @@ export interface UserProfile {
 
 export type CustomerFormValues = Omit<
   Customer,
-  'id' | 'serial_number' | 'user_id' | 'created_at' | 'updated_at'
+  | 'id'
+  | 'serial_number'
+  | 'user_id'
+  | 'created_at'
+  | 'updated_at'
+  | 'interested_in'
+  | 'logo_path'
 >
 
 export type Page = 'dashboard' | 'customers' | 'add' | 'detail' | 'settings'

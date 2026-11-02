@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, setRememberSession, supabase } from './supabase'
-import type { CountType, Customer, CustomerFormValues, Page, SalesOption, Sector, UserProfile } from './types'
+import type { CountType, Customer, CustomerFormValues, LeadStatus, Page, PriorityLevel, SalesOption, Sector, UserProfile } from './types'
 import { sectors } from './types'
 
 type FormState = {
@@ -11,10 +11,16 @@ type FormState = {
   other_sector: string
   poc_name: string
   contact_number: string
+  email: string
   alternative_poc_name: string
   alternative_poc_contact: string
+  main_branch_location: string
+  main_branch_contact: string
+  main_branch_contact_same_as_primary: boolean
   beat_name: string
   approached_for: string
+  priority_level: PriorityLevel
+  lead_status: LeadStatus
   area: string
   city: string
   location: string
@@ -35,10 +41,16 @@ const emptyForm: FormState = {
   other_sector: '',
   poc_name: '',
   contact_number: '',
+  email: '',
   alternative_poc_name: '',
   alternative_poc_contact: '',
+  main_branch_location: '',
+  main_branch_contact: '',
+  main_branch_contact_same_as_primary: true,
   beat_name: '',
   approached_for: '',
+  priority_level: 'medium',
+  lead_status: 'new',
   area: '',
   city: '',
   location: '',
@@ -97,6 +109,35 @@ function Logo({ className = '' }: { className?: string }) {
   return <span className={`brand-logo-badge ${className}`}><img className="brand-image" src="/royal-klense-logo.png" alt="Royal Klense logo" /></span>
 }
 
+function CustomerLogoThumbnail({
+  customer,
+  logoUrl,
+  onPreview,
+}: {
+  customer: Customer
+  logoUrl?: string
+  onPreview: (name: string, url: string) => void
+}) {
+  const label = `${customer.customer_name} logo`
+  if (!logoUrl) {
+    return <span className="customer-logo-thumbnail customer-logo-placeholder" aria-hidden="true">{customer.customer_name.slice(0, 1).toUpperCase()}</span>
+  }
+  return (
+    <button
+      className="customer-logo-thumbnail"
+      type="button"
+      aria-label={`View ${label}`}
+      title={`View ${label}`}
+      onClick={(event) => {
+        event.stopPropagation()
+        onPreview(customer.customer_name, logoUrl)
+      }}
+    >
+      <img src={logoUrl} alt="" loading="lazy" />
+    </button>
+  )
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
@@ -119,6 +160,10 @@ function sectorLabel(customer: Customer): string {
     : customer.sector
 }
 
+function displayLabel(value: string): string {
+  return value.charAt(0).toLocaleUpperCase() + value.slice(1)
+}
+
 function customerToForm(customer: Customer): FormState {
   return {
     customer_name: customer.customer_name,
@@ -126,10 +171,16 @@ function customerToForm(customer: Customer): FormState {
     other_sector: customer.other_sector ?? '',
     poc_name: customer.poc_name ?? '',
     contact_number: customer.contact_number ?? '',
+    email: customer.email ?? '',
     alternative_poc_name: customer.alternative_poc_name ?? '',
     alternative_poc_contact: customer.alternative_poc_contact ?? '',
+    main_branch_location: customer.main_branch_location ?? '',
+    main_branch_contact: customer.main_branch_contact ?? '',
+    main_branch_contact_same_as_primary: customer.main_branch_contact_same_as_primary ?? true,
     beat_name: customer.beat_name ?? '',
     approached_for: customer.approached_for ?? '',
+    priority_level: customer.priority_level ?? 'medium',
+    lead_status: customer.lead_status ?? 'new',
     area: customer.area ?? '',
     city: customer.city ?? '',
     location: customer.location ?? '',
@@ -153,10 +204,18 @@ function formToCustomer(values: FormState): CustomerFormValues {
     other_sector: values.sector === 'Others' ? values.other_sector.trim() : null,
     poc_name: values.poc_name.trim() || null,
     contact_number: values.contact_number.trim() || null,
+    email: values.email.trim() || null,
     alternative_poc_name: values.alternative_poc_name.trim() || null,
     alternative_poc_contact: values.alternative_poc_contact.trim() || null,
+    main_branch_location: values.main_branch_location.trim() || null,
+    main_branch_contact: values.main_branch_contact_same_as_primary
+      ? null
+      : values.main_branch_contact.trim() || null,
+    main_branch_contact_same_as_primary: values.main_branch_contact_same_as_primary,
     beat_name: values.beat_name.trim() || null,
     approached_for: values.approached_for.trim() || null,
+    priority_level: values.priority_level,
+    lead_status: values.lead_status,
     area: values.area.trim() || null,
     city: values.city.trim() || null,
     location: values.location.trim() || null,
@@ -202,6 +261,8 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [splash, setSplash] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [customerLogoUrls, setCustomerLogoUrls] = useState<Record<string, string>>({})
+  const [logoPreview, setLogoPreview] = useState<{ name: string; url: string } | null>(null)
   const [staff, setStaff] = useState<UserProfile[]>([])
   const [salesOptions, setSalesOptions] = useState<SalesOption[]>([])
   const [salesOptionsLoading, setSalesOptionsLoading] = useState(false)
@@ -390,6 +451,60 @@ export default function App() {
     () => new Map(staff.map((person) => [person.user_id, `${person.full_name} (${person.employee_id})`])),
     [staff],
   )
+  const previewCustomerLogo = (name: string, url: string) => setLogoPreview({ name, url })
+  const customerLogoPathKey = useMemo(
+    () => customers.filter((customer) => customer.logo_path).map((customer) => `${customer.id}:${customer.logo_path}:${customer.updated_at}`).join('|'),
+    [customers],
+  )
+
+  useEffect(() => {
+    let active = true
+    const logoPaths = [...new Set(customers.map((customer) => customer.logo_path).filter((path): path is string => Boolean(path)))]
+    if (!supabase || logoPaths.length === 0) {
+      setCustomerLogoUrls({})
+      return
+    }
+
+    void (async () => {
+      const urls: Record<string, string> = {}
+      try {
+        for (let offset = 0; offset < logoPaths.length; offset += 100) {
+          const batch = logoPaths.slice(offset, offset + 100)
+          const { data, error } = await supabase.storage
+            .from('customer-logos')
+            .createSignedUrls(batch, 60 * 60)
+          if (error) throw error
+          for (const item of data ?? []) {
+            if (item.path && item.signedUrl) {
+              const customer = customers.find((record) => record.logo_path === item.path)
+              const signedUrl = new URL(item.signedUrl)
+              if (customer) signedUrl.searchParams.set('v', customer.updated_at)
+              urls[item.path] = signedUrl.toString()
+            }
+          }
+        }
+        if (active) setCustomerLogoUrls(urls)
+      } catch {
+        if (active) {
+          setCustomerLogoUrls(urls)
+          notify('Some client logos could not be loaded. Check Supabase Storage access and try again.', 'error')
+        }
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [customerLogoPathKey, customers, notify])
+
+  useEffect(() => {
+    if (!logoPreview) return
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLogoPreview(null)
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [logoPreview])
 
   const checkForUpdates = useCallback(async (showChecking = true) => {
     if (showChecking) {
@@ -424,16 +539,21 @@ export default function App() {
     }
 
     const headers = [
-      'S.No.',
-      ...(isAdmin ? ['Sales Employee'] : []),
       'Customer Name',
+      'Sales Employee',
       'Sector',
       'Details',
       'Contact Number',
+      'Email',
       'Alternative POC',
       'Alternative POC Contact',
+      'Main Branch Location',
+      'Main Branch Contact',
       'Beat Name',
       'Approached For',
+      'Interested In',
+      'Priority',
+      'Lead Status',
       'Area',
       'City',
       'Location',
@@ -444,22 +564,27 @@ export default function App() {
       'Required Litres / Month',
       'Current Purchase',
       'Remarks',
-      'Created At',
     ]
 
     const rows = customers.map((customer) => {
-      const employeeName = isAdmin ? (staffNames.get(customer.user_id) ?? '') : ''
       return [
-        String(customer.serial_number),
-        ...(isAdmin ? [employeeName] : []),
         customer.customer_name,
+        staffNames.get(customer.user_id) ?? '',
         sectorLabel(customer),
         customer.poc_name ?? '',
         customer.contact_number ?? '',
+        customer.email ?? '',
         customer.alternative_poc_name ?? '',
         customer.alternative_poc_contact ?? '',
+        customer.main_branch_location ?? '',
+        customer.main_branch_contact_same_as_primary !== false
+          ? customer.contact_number ?? ''
+          : customer.main_branch_contact ?? '',
         customer.beat_name ?? '',
         customer.approached_for ?? '',
+        customer.interested_in ?? '',
+        customer.priority_level ?? '',
+        customer.lead_status ?? '',
         customer.area ?? '',
         customer.city ?? '',
         customer.location ?? '',
@@ -470,7 +595,6 @@ export default function App() {
         customer.required_litres_per_month ?? '',
         customer.current_purchase ?? '',
         customer.remarks ?? '',
-        customer.created_at,
       ]
     })
 
@@ -503,8 +627,10 @@ export default function App() {
         customer.customer_name,
         customer.poc_name,
         customer.contact_number,
+        customer.email,
         customer.alternative_poc_name,
         customer.alternative_poc_contact,
+        customer.main_branch_contact,
         customer.area,
         customer.city,
         customer.location,
@@ -703,7 +829,7 @@ export default function App() {
     if (nextPage !== 'detail') setSelected(null)
   }
 
-  const submitCustomer = async (event: FormEvent<HTMLFormElement>) => {
+  const submitCustomer = async (event: FormEvent<HTMLFormElement>, logoFile: File | null) => {
     event.preventDefault()
     setFormError('')
     if (isAdmin) {
@@ -751,8 +877,44 @@ export default function App() {
         return
       }
 
-      const saved = response.data as Customer
-      notify(editing ? 'Customer updated successfully.' : 'Customer saved successfully.')
+      let saved = response.data as Customer
+      let logoUploadFailed = false
+      if (logoFile) {
+        const logoPath = `${session.user.id}/${saved.id}/logo`
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from('customer-logos')
+            .upload(logoPath, logoFile, {
+              cacheControl: '3600',
+              contentType: logoFile.type,
+              upsert: true,
+            })
+
+          if (uploadError) {
+            logoUploadFailed = true
+          } else {
+            const { data: updatedCustomer, error: logoSaveError } = await supabase
+              .from('customers')
+              .update({ logo_path: logoPath })
+              .eq('id', saved.id)
+              .select()
+              .single()
+            if (logoSaveError || !updatedCustomer) {
+              logoUploadFailed = true
+            } else {
+              saved = updatedCustomer as Customer
+            }
+          }
+        } catch {
+          logoUploadFailed = true
+        }
+      }
+
+      if (logoUploadFailed) {
+        notify('The lead was saved, but its logo could not be saved. Edit the lead and try uploading the logo again.', 'error')
+      } else {
+        notify(editing ? 'Customer updated successfully.' : 'Customer saved successfully.')
+      }
       await refreshCustomers(session.user.id)
       if (editing) {
         setSelected(saved)
@@ -768,6 +930,36 @@ export default function App() {
     }
   }
 
+  const assignCustomerInterest = async (interest: string) => {
+    if (!isAdmin || !supabase || !selected) {
+      notify('Only an administrator can assign lead interest.', 'error')
+      return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .update({ interested_in: interest || null })
+        .eq('id', selected.id)
+        .select()
+        .single()
+
+      if (error || !data) {
+        notify('Lead interest could not be updated. Check the database permissions and try again.', 'error')
+        return
+      }
+
+      const updatedCustomer = data as Customer
+      setSelected(updatedCustomer)
+      setCustomers((current) => current.map((customer) =>
+        customer.id === updatedCustomer.id ? updatedCustomer : customer,
+      ))
+      notify('Lead interest updated.')
+    } catch {
+      notify('Lead interest could not be updated. Check your connection and try again.', 'error')
+    }
+  }
+
   const deleteCustomer = async () => {
     if (!supabase || !selected) return
     if (!window.confirm(`Delete ${selected.customer_name}? This action cannot be undone.`)) return
@@ -777,9 +969,25 @@ export default function App() {
         notify('This customer could not be deleted. Please try again.', 'error')
         return
       }
+      let logoCleanupFailed = false
+      if (selected.logo_path) {
+        try {
+          const { error: logoError } = await supabase.storage
+            .from('customer-logos')
+            .remove([selected.logo_path])
+          logoCleanupFailed = Boolean(logoError)
+        } catch {
+          logoCleanupFailed = true
+        }
+      }
       setSelected(null)
       setPage('customers')
-      notify('Customer deleted.')
+      notify(
+        logoCleanupFailed
+          ? 'Customer deleted, but its logo file could not be removed from storage.'
+          : 'Customer deleted.',
+        logoCleanupFailed ? 'error' : 'success',
+      )
       await refreshCustomers(session.user.id)
     } catch {
       notify('This customer could not be deleted. Please try again.', 'error')
@@ -837,6 +1045,7 @@ export default function App() {
               admin={isAdmin}
               customers={customers}
               employees={staff}
+              customerLogoUrls={customerLogoUrls}
               stats={stats}
               loading={customersLoading}
               onAdd={openAdd}
@@ -845,6 +1054,7 @@ export default function App() {
               onExportCsv={exportCustomersAsCsv}
               onCheckForUpdates={() => void checkForUpdates()}
               onOpenCustomer={openCustomer}
+              onPreviewLogo={previewCustomerLogo}
             />
           )}
           {page === 'customers' && (
@@ -852,6 +1062,7 @@ export default function App() {
               customers={filteredCustomers}
               admin={isAdmin}
               staffNames={staffNames}
+              customerLogoUrls={customerLogoUrls}
               allCount={customers.length}
               loading={customersLoading}
               search={search}
@@ -869,6 +1080,7 @@ export default function App() {
               onToDate={setToDate}
               onAdd={openAdd}
               onOpenCustomer={openCustomer}
+              onPreviewLogo={previewCustomerLogo}
               onClearFilters={() => {
                 setSearch('')
                 setSectorFilter('')
@@ -883,13 +1095,14 @@ export default function App() {
               form={form}
               editing={editing}
               savedCustomer={savedCustomer}
+              existingLogoPath={editing ? selected?.logo_path ?? null : null}
               salesOptions={salesOptions}
               salesOptionsLoading={salesOptionsLoading}
               salesOptionsError={salesOptionsError}
               loading={submitting}
               error={formError}
               onChange={setForm}
-              onSubmit={submitCustomer}
+              onSubmit={(event, logoFile) => void submitCustomer(event, logoFile)}
               onCancel={() => editing && selected ? openCustomer(selected) : goTo('customers')}
               onAddAnother={() => {
                 setForm(emptyForm)
@@ -917,6 +1130,11 @@ export default function App() {
                 setPage('add')
               }}
               onDelete={deleteCustomer}
+              admin={isAdmin}
+              interestOptions={salesOptions
+                .filter((option) => option.option_type === 'interested_in')
+                .map((option) => option.value)}
+              onAssignInterest={assignCustomerInterest}
             />
           )}
           {page === 'settings' && isAdmin && (
@@ -940,6 +1158,23 @@ export default function App() {
           onRetry={() => void checkForUpdates()}
           onUpdate={applyUpdate}
         />
+      )}
+      {logoPreview && (
+        <div
+          className="logo-preview-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setLogoPreview(null)
+          }}
+        >
+          <section className="logo-preview-dialog" role="dialog" aria-modal="true" aria-label={`${logoPreview.name} logo`}>
+            <button className="logo-preview-close icon-button" type="button" aria-label="Close logo preview" onClick={() => setLogoPreview(null)}>
+              <Icon name="close" size={18} />
+            </button>
+            <img src={logoPreview.url} alt={`${logoPreview.name} logo`} />
+            <strong>{logoPreview.name}</strong>
+          </section>
+        </div>
       )}
       {notice && <div className={`toast toast-${notice.kind}`} role="status"><span className="toast-icon"><Icon name={notice.kind === 'success' ? 'check' : notice.kind === 'error' ? 'close' : 'sparkles'} size={16} /></span>{notice.text}</div>}
     </div>
@@ -1120,6 +1355,7 @@ function Dashboard({
   profile,
   admin,
   customers,
+  customerLogoUrls,
   employees,
   stats,
   loading,
@@ -1129,10 +1365,12 @@ function Dashboard({
   onExportCsv,
   onCheckForUpdates,
   onOpenCustomer,
+  onPreviewLogo,
 }: {
   profile: UserProfile
   admin: boolean
   customers: Customer[]
+  customerLogoUrls: Record<string, string>
   employees: UserProfile[]
   stats: { total: number; hotels: number; hospitals: number; schools: number; colleges: number; others: number }
   loading: boolean
@@ -1142,6 +1380,7 @@ function Dashboard({
   onExportCsv: () => void
   onCheckForUpdates: () => void
   onOpenCustomer: (customer: Customer) => void
+  onPreviewLogo: (name: string, url: string) => void
 }) {
   const customerCountsByEmployee = new Map<string, number>()
   for (const customer of customers) {
@@ -1227,7 +1466,11 @@ function Dashboard({
           <div className="recent-list">
             {customers.map((customer) => (
               <button className="recent-item" key={customer.id} onClick={() => onOpenCustomer(customer)}>
-                <div className="customer-monogram">{customer.customer_name.slice(0, 1).toUpperCase()}</div>
+                <CustomerLogoThumbnail
+                  customer={customer}
+                  logoUrl={customer.logo_path ? customerLogoUrls[customer.logo_path] : undefined}
+                  onPreview={onPreviewLogo}
+                />
                 <div className="recent-main"><strong>{customer.customer_name}</strong><span>{sectorLabel(customer)}{customer.city ? ` · ${customer.city}` : ''}</span></div>
                 <span className="recent-date">{formatDate(customer.created_at)}</span><Icon name="chevron" size={16} />
               </button>
@@ -1244,6 +1487,7 @@ function CustomerList({
   customers,
   admin,
   staffNames,
+  customerLogoUrls,
   allCount,
   loading,
   search,
@@ -1261,11 +1505,13 @@ function CustomerList({
   onToDate,
   onAdd,
   onOpenCustomer,
+  onPreviewLogo,
   onClearFilters,
 }: {
   customers: Customer[]
   admin: boolean
   staffNames: Map<string, string>
+  customerLogoUrls: Record<string, string>
   allCount: number
   loading: boolean
   search: string
@@ -1283,6 +1529,7 @@ function CustomerList({
   onToDate: (value: string) => void
   onAdd: () => void
   onOpenCustomer: (customer: Customer) => void
+  onPreviewLogo: (name: string, url: string) => void
   onClearFilters: () => void
 }) {
   const hasFilters = Boolean(search || sectorFilter || cityFilter || fromDate || toDate)
@@ -1318,15 +1565,22 @@ function CustomerList({
         ) : (
           <>
             <div className="table-scroll"><table className="customer-table">
-              <thead><tr><th>S.NO.</th>{admin && <th>SALES EMPLOYEE</th>}<th>CUSTOMER NAME</th><th>SECTOR</th><th>DETAILS</th><th>CONTACT NUMBER</th><th>ALTERNATIVE POC</th><th>ALTERNATIVE POC CONTACT</th><th>BEAT NAME</th><th>APPROACHED FOR</th><th>AREA</th><th>CITY</th><th>LOCATION</th><th>ROOM / FLOOR COUNT</th><th>STRENGTH</th><th>BRANCHES</th><th>LITRES / MONTH</th><th>CURRENT PURCHASE</th><th>REMARKS</th><th aria-label="Open" /></tr></thead>
+              <thead><tr><th>CUSTOMER NAME</th>{admin && <th>SALES EMPLOYEE</th>}<th>SECTOR</th><th>LEAD STATUS</th><th>PRIORITY</th><th>INTERESTED IN</th><th>EMAIL</th><th>DETAILS</th><th>CONTACT NUMBER</th><th>MAIN BRANCH LOCATION</th><th>MAIN BRANCH CONTACT</th><th>ALTERNATIVE POC</th><th>ALTERNATIVE POC CONTACT</th><th>BEAT NAME</th><th>APPROACHED FOR</th><th>AREA</th><th>CITY</th><th>LOCATION</th><th>ROOM / FLOOR COUNT</th><th>STRENGTH</th><th>BRANCHES</th><th>LITRES / MONTH</th><th>CURRENT PURCHASE</th><th>REMARKS</th><th aria-label="Open" /></tr></thead>
               <tbody>{customers.map((customer) => (
                 <tr key={customer.id} onClick={() => onOpenCustomer(customer)}>
-                  <td><span className="serial-pill">{customer.serial_number}</span></td>
+                  <td><div className="table-customer-identity"><CustomerLogoThumbnail customer={customer} logoUrl={customer.logo_path ? customerLogoUrls[customer.logo_path] : undefined} onPreview={onPreviewLogo} /><strong className="table-customer-name">{customer.customer_name}</strong></div></td>
                   {admin && <td>{staffNames.get(customer.user_id) ?? 'Employee'}</td>}
-                  <td><strong className="table-customer-name">{customer.customer_name}</strong></td>
                   <td><span className="sector-pill">{sectorLabel(customer)}</span></td>
+                  <td><span className={`lead-status-badge lead-status-${customer.lead_status ?? 'new'}`}>{displayLabel(customer.lead_status ?? 'New')}</span></td>
+                  <td><span className={`priority-badge priority-${customer.priority_level ?? 'medium'}`}><i />{displayLabel(customer.priority_level ?? 'Medium')}</span></td>
+                  <td>{customer.interested_in || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.email || <span className="muted-dash">—</span>}</td>
                   <td>{customer.poc_name || <span className="muted-dash">—</span>}</td>
                   <td>{customer.contact_number || <span className="muted-dash">—</span>}</td>
+                  <td className="table-truncate" title={customer.main_branch_location ?? ''}>{customer.main_branch_location || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.main_branch_contact_same_as_primary !== false
+                    ? customer.contact_number || <span className="muted-dash">—</span>
+                    : customer.main_branch_contact || <span className="muted-dash">—</span>}</td>
                   <td>{customer.alternative_poc_name || <span className="muted-dash">—</span>}</td>
                   <td>{customer.alternative_poc_contact || <span className="muted-dash">—</span>}</td>
                   <td>{customer.beat_name || <span className="muted-dash">—</span>}</td>
@@ -1346,8 +1600,13 @@ function CustomerList({
             </table></div>
             <div className="mobile-customer-list">{customers.map((customer) => (
               <button className="mobile-customer-card" key={customer.id} onClick={() => onOpenCustomer(customer)}>
-                <div className="mobile-customer-top"><div className="customer-monogram">{customer.customer_name.slice(0, 1).toUpperCase()}</div><div className="mobile-customer-main"><strong>{customer.customer_name}</strong><span>{sectorLabel(customer)}</span></div><Icon name="chevron" size={17} /></div>
+                <div className="mobile-customer-top"><CustomerLogoThumbnail customer={customer} logoUrl={customer.logo_path ? customerLogoUrls[customer.logo_path] : undefined} onPreview={onPreviewLogo} /><div className="mobile-customer-main"><strong>{customer.customer_name}</strong><span>{sectorLabel(customer)}</span></div><Icon name="chevron" size={17} /></div>
                 <div className="mobile-customer-meta"><span>{admin ? (staffNames.get(customer.user_id) ?? 'Employee') : (customer.poc_name || 'No contact')}</span><span>{[customer.city, customer.area].filter(Boolean).join(' · ') || 'Location not added'}</span></div>
+                <div className="mobile-lead-tags">
+                  <span className={`lead-status-badge lead-status-${customer.lead_status ?? 'new'}`}>{displayLabel(customer.lead_status ?? 'New')}</span>
+                  <span className={`priority-badge priority-${customer.priority_level ?? 'medium'}`}><i />{displayLabel(customer.priority_level ?? 'Medium')}</span>
+                  {customer.interested_in && <span className="mobile-interest">{customer.interested_in}</span>}
+                </div>
               </button>
             ))}</div>
           </>
@@ -1362,6 +1621,7 @@ function CustomerForm({
   form,
   editing,
   savedCustomer,
+  existingLogoPath,
   salesOptions,
   salesOptionsLoading,
   salesOptionsError,
@@ -1376,17 +1636,23 @@ function CustomerForm({
   form: FormState
   editing: boolean
   savedCustomer: Customer | null
+  existingLogoPath: string | null
   salesOptions: SalesOption[]
   salesOptionsLoading: boolean
   salesOptionsError: string
   loading: boolean
   error: string
   onChange: (form: FormState) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>, logoFile: File | null) => void
   onCancel: () => void
   onAddAnother: () => void
   onViewCustomer: () => void
 }) {
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoError, setLogoError] = useState('')
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState('')
+  const logoCameraInputRef = useRef<HTMLInputElement>(null)
+  const logoGalleryInputRef = useRef<HTMLInputElement>(null)
   const setField = (key: Exclude<keyof FormState, 'count_type'>, value: string) => onChange({ ...form, [key]: value })
   const optionValues = (optionType: SalesOption['option_type'], selected: string) => {
     const values = salesOptions
@@ -1397,6 +1663,38 @@ function CustomerForm({
   }
   const [locationLoading, setLocationLoading] = useState(false)
   const [locationMessage, setLocationMessage] = useState('')
+
+  useEffect(() => {
+    let active = true
+    if (logoFile) {
+      const previewUrl = URL.createObjectURL(logoFile)
+      setLogoPreviewUrl(previewUrl)
+      return () => {
+        active = false
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+
+    if (!existingLogoPath || !supabase) {
+      setLogoPreviewUrl('')
+      return
+    }
+
+    void supabase.storage
+      .from('customer-logos')
+      .createSignedUrl(existingLogoPath, 60 * 60)
+      .then(({ data, error }) => {
+        if (!active) return
+        setLogoPreviewUrl(error ? '' : data?.signedUrl ?? '')
+      })
+      .catch(() => {
+        if (active) setLogoPreviewUrl('')
+      })
+
+    return () => {
+      active = false
+    }
+  }, [logoFile, existingLogoPath])
 
   const useCurrentLocation = () => {
     setLocationMessage('')
@@ -1431,21 +1729,45 @@ function CustomerForm({
     )
   }
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (logoError) {
+      event.preventDefault()
+      return
+    }
+    onSubmit(event, logoFile)
+  }
+
+  const handleLogoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0] ?? null
+    event.target.value = ''
+    if (selectedFile && !['image/png', 'image/jpeg', 'image/webp'].includes(selectedFile.type)) {
+      setLogoFile(null)
+      setLogoError('Choose a PNG, JPEG, or WebP image.')
+      return
+    }
+    if (selectedFile && selectedFile.size > 5 * 1024 * 1024) {
+      setLogoFile(null)
+      setLogoError('The logo must be 5 MB or smaller.')
+      return
+    }
+    setLogoError('')
+    setLogoFile(selectedFile)
+  }
+
   return (
     <div className="form-page">
       <button className="back-link" onClick={onCancel}><Icon name="arrow" size={16} /> Back to customers</button>
       <div className="page-heading-row form-heading">
         <div><div className="eyebrow"><span /> CUSTOMER DETAILS</div><h1>{editing ? 'Edit customer' : 'Add a customer'}</h1><p className="page-subtitle">A few details now make every follow-up easier later.</p></div>
-        {editing && <span className="editing-number">S.No. {form.customer_name ? '· Updating record' : ''}</span>}
       </div>
       {savedCustomer ? (
         <section className="save-success-card" role="status">
           <span className="save-success-icon"><Icon name="check" size={21} /></span>
           <div className="save-success-copy"><h2>Customer saved successfully</h2><p><strong>{savedCustomer.customer_name}</strong> is now in your customer list.</p></div>
-          <div className="save-success-actions"><button className="button button-outline" onClick={onAddAnother}><Icon name="plus" size={16} /> Add another</button><button className="button button-primary" onClick={onViewCustomer}>View customer <Icon name="chevron" size={15} /></button></div>
+          <div className="save-success-actions"><button className="button button-outline" onClick={() => { setLogoFile(null); setLogoError(''); onAddAnother() }}><Icon name="plus" size={16} /> Add another</button><button className="button button-primary" onClick={onViewCustomer}>View customer <Icon name="chevron" size={15} /></button></div>
         </section>
       ) : (
-      <form className="customer-form" onSubmit={onSubmit}>
+      <form className="customer-form" onSubmit={handleSubmit}>
         <section className="form-section">
           <div className="form-section-heading"><span className="form-step">01</span><div><h2>Business details</h2><p>Who are you visiting?</p></div></div>
           <div className="form-grid">
@@ -1465,14 +1787,21 @@ function CustomerForm({
           </div>
         </section>
         <section className="form-section">
-          <div className="form-section-heading"><span className="form-step">02</span><div><h2>Details</h2><p>Who should your team speak with?</p></div></div>
+          <div className="form-section-heading"><span className="form-step">02</span><div><h2>Contact & lead qualification</h2><p>Who should your team speak with, and how should this lead be prioritized?</p></div></div>
           <div className="form-grid">
             <Field label="Details" required><input required className="text-input" placeholder="Point of contact name" value={form.poc_name} onChange={(event) => setField('poc_name', event.target.value)} /></Field>
             <Field label="Contact number" required><input required className="text-input" type="tel" inputMode="tel" placeholder="Include area code if needed" value={form.contact_number} onChange={(event) => setField('contact_number', event.target.value)} /></Field>
+            <Field label="Email address"><input className="text-input" type="email" placeholder="name@example.com" value={form.email} onChange={(event) => setField('email', event.target.value)} /></Field>
             <Field label="Alternative POC"><input className="text-input" placeholder="Alternative contact person's name" value={form.alternative_poc_name} onChange={(event) => setField('alternative_poc_name', event.target.value)} /></Field>
             <Field label="Alternative POC contact"><input className="text-input" type="tel" inputMode="tel" placeholder="Alternative contact number" value={form.alternative_poc_contact} onChange={(event) => setField('alternative_poc_contact', event.target.value)} /></Field>
+            <Field label="Main branch contact">
+              <span className="same-contact-toggle"><input type="checkbox" checked={form.main_branch_contact_same_as_primary} onChange={(event) => onChange({ ...form, main_branch_contact_same_as_primary: event.target.checked })} /> Same as primary contact number</span>
+              <input className="text-input" type="tel" inputMode="tel" placeholder="Main branch contact number" value={form.main_branch_contact_same_as_primary ? form.contact_number : form.main_branch_contact} onChange={(event) => setField('main_branch_contact', event.target.value)} disabled={form.main_branch_contact_same_as_primary} required={!form.main_branch_contact_same_as_primary} />
+            </Field>
             <Field label="Beat name" required><select required className="text-input select-input" value={form.beat_name} onChange={(event) => setField('beat_name', event.target.value)} disabled={salesOptionsLoading || Boolean(salesOptionsError)}><option value="">{salesOptionsLoading ? 'Loading beat names…' : 'Select a beat name'}</option>{optionValues('beat_name', form.beat_name).map((value) => <option key={value} value={value}>{value}</option>)}</select></Field>
             <Field label="Approached for" required><select required className="text-input select-input" value={form.approached_for} onChange={(event) => setField('approached_for', event.target.value)} disabled={salesOptionsLoading || Boolean(salesOptionsError)}><option value="">{salesOptionsLoading ? 'Loading options…' : 'Select an option'}</option>{optionValues('approached_for', form.approached_for).map((value) => <option key={value} value={value}>{value}</option>)}</select></Field>
+            <Field label="Priority level" required><select required className="text-input select-input" value={form.priority_level} onChange={(event) => setField('priority_level', event.target.value as PriorityLevel)}><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></Field>
+            <Field label="Lead status" required><select required className="text-input select-input" value={form.lead_status} onChange={(event) => setField('lead_status', event.target.value as LeadStatus)}><option value="new">New</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option><option value="converted">Converted</option><option value="lost">Lost</option></select></Field>
             <Field label="Current purchase" required><input required className="text-input" placeholder="e.g. Local supplier, Own plant" value={form.current_purchase} onChange={(event) => setField('current_purchase', event.target.value)} /></Field>
             <Field label="Required litres per month" required><div className="input-suffix"><input required className="text-input" type="number" min="0" step="any" placeholder="e.g. 1250.5" value={form.required_litres_per_month} onChange={(event) => setField('required_litres_per_month', event.target.value)} /><span>litres</span></div></Field>
           </div>
@@ -1486,6 +1815,7 @@ function CustomerForm({
           <div className="form-grid">
             <Field label="Area" required><input required className="text-input" placeholder="e.g. Indiranagar" value={form.area} onChange={(event) => setField('area', event.target.value)} /></Field>
             <Field label="City" required><input required className="text-input" placeholder="e.g. Bengaluru" value={form.city} onChange={(event) => setField('city', event.target.value)} /></Field>
+            <Field label="Main branch location"><input className="text-input" placeholder="Location of the main branch" value={form.main_branch_location} onChange={(event) => setField('main_branch_location', event.target.value)} /></Field>
             <div className="form-field field-wide">
               <span className="field-label">Location / address <span className="required-star"> *</span></span>
               <div className="location-input-row">
@@ -1497,6 +1827,46 @@ function CustomerForm({
               {locationMessage && <span className="field-hint" role="status" aria-live="polite">{locationMessage}</span>}
             </div>
             <Field label="Remarks" required wide><textarea required className="text-input textarea-input" rows={4} placeholder="Add useful observations for your next visit…" value={form.remarks} onChange={(event) => setField('remarks', event.target.value)} /></Field>
+          </div>
+        </section>
+        <section className="form-section">
+          <div className="form-section-heading"><span className="form-step">04</span><div><h2>Client logo</h2><p>Take a clear photo of the client logo or choose an image.</p></div></div>
+          <div className="logo-uploader">
+            <div className={`logo-preview ${logoPreviewUrl ? 'logo-preview-filled' : ''}`}>
+              {logoPreviewUrl
+                ? <img src={logoPreviewUrl} alt="Client logo preview" />
+                : <span className="logo-preview-placeholder"><Icon name="building" size={27} /></span>}
+            </div>
+            <div className="logo-upload-copy">
+              <strong>{logoFile ? 'Logo ready to save' : existingLogoPath ? 'Client logo saved' : 'Add a client logo'}</strong>
+              <span>{logoFile ? logoFile.name : 'PNG, JPEG or WebP · up to 5 MB'}</span>
+              <div className="logo-upload-actions">
+                <input
+                  ref={logoCameraInputRef}
+                  className="logo-file-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  capture="environment"
+                  aria-label="Take a photo of the client logo"
+                  onChange={handleLogoFileChange}
+                />
+                <input
+                  ref={logoGalleryInputRef}
+                  className="logo-file-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  aria-label="Choose a client logo from this device"
+                  onChange={handleLogoFileChange}
+                />
+                <button className="logo-add-button" type="button" onClick={() => logoCameraInputRef.current?.click()}>
+                  <Icon name="plus" size={17} /> {logoFile || existingLogoPath ? 'Retake photo' : 'Take photo'}
+                </button>
+                <button className="logo-gallery-button" type="button" onClick={() => logoGalleryInputRef.current?.click()}>
+                  Choose from gallery
+                </button>
+              </div>
+              {logoError && <span className="field-hint logo-error" role="alert">{logoError}</span>}
+            </div>
           </div>
         </section>
         {error && <div className="form-alert form-alert-wide" role="alert">{error}</div>}
@@ -1539,6 +1909,7 @@ function SalesOptionsAdmin({
   const [drafts, setDrafts] = useState<Record<SalesOption['option_type'], string>>({
     beat_name: '',
     approached_for: '',
+    interested_in: '',
   })
   const [editingId, setEditingId] = useState('')
   const [editingValue, setEditingValue] = useState('')
@@ -1652,7 +2023,9 @@ function SalesOptionsAdmin({
         <button className="button button-primary" type="submit" disabled={saving}><Icon name="plus" size={16} /> Add</button>
       </form>
       {loading ? <div className="option-loading"><span className="button-spinner" /> Loading options…</div> : groupOptions(type).length === 0 ? (
-        <p className="option-empty">No options yet. Add one above so employees can select it in the customer form.</p>
+        <p className="option-empty">{type === 'interested_in'
+          ? 'No options yet. Add one above so admins can assign lead interest.'
+          : 'No options yet. Add one above so employees can select it in the customer form.'}</p>
       ) : (
         <ul className="option-list">{groupOptions(type).map((option) => (
           <li key={option.id}>
@@ -1681,12 +2054,13 @@ function SalesOptionsAdmin({
     <div className="settings-page">
       <button className="back-link" onClick={onBack}><Icon name="arrow" size={16} /> Back to overview</button>
       <div className="page-heading-row">
-        <div><div className="eyebrow"><span /> ADMIN SETTINGS</div><h1>Sales form options</h1><p className="page-subtitle">Manage the beat names and approached-for choices available to employees.</p></div>
+        <div><div className="eyebrow"><span /> ADMIN SETTINGS</div><h1>Sales options</h1><p className="page-subtitle">Manage the choices used on sales leads and admin assignments.</p></div>
       </div>
       {error && <div className="form-alert form-alert-wide" role="alert">{error}</div>}
       <div className="option-manager-grid">
         {renderGroup('beat_name', 'Beat names', 'Employees choose one of these beat names for each customer.')}
         {renderGroup('approached_for', 'Approached for', 'Employees choose what the customer was approached for.')}
+        {renderGroup('interested_in', 'Interested in', 'Admins use these choices to assign a lead interest.')}
       </div>
       <p className="option-admin-note">Changes are saved immediately. Deleting or renaming an option does not change values already saved on customer records.</p>
     </div>
@@ -1697,6 +2071,9 @@ function CustomerDetail({
   customer,
   readOnly,
   createdBy,
+  admin,
+  interestOptions,
+  onAssignInterest,
   onBack,
   onEdit,
   onDelete,
@@ -1704,15 +2081,56 @@ function CustomerDetail({
   customer: Customer
   readOnly: boolean
   createdBy?: string
+  admin: boolean
+  interestOptions: string[]
+  onAssignInterest: (interest: string) => Promise<void>
   onBack: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
+  const [savingInterest, setSavingInterest] = useState(false)
+  const [logoUrl, setLogoUrl] = useState('')
+  const [logoError, setLogoError] = useState('')
+  const availableInterestOptions = customer.interested_in && !interestOptions.includes(customer.interested_in)
+    ? [...interestOptions, customer.interested_in]
+    : interestOptions
+
+  useEffect(() => {
+    let active = true
+    setLogoUrl('')
+    setLogoError('')
+    if (!customer.logo_path) return
+    if (!supabase) {
+      setLogoError('Logo storage is not configured.')
+      return
+    }
+
+    void supabase.storage
+      .from('customer-logos')
+      .createSignedUrl(customer.logo_path, 60 * 60)
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error || !data?.signedUrl) {
+          setLogoError('The client logo could not be loaded.')
+          return
+        }
+        setLogoUrl(`${data.signedUrl}&v=${encodeURIComponent(customer.updated_at)}`)
+      })
+      .catch(() => {
+        if (active) setLogoError('The client logo could not be loaded. Check your connection and try again.')
+      })
+
+    return () => {
+      active = false
+    }
+  }, [customer.id, customer.logo_path, customer.updated_at])
   const sections: { title: string; fields: [string, string | number | null][] }[] = [
     {
       title: 'Business details',
       fields: [
         ['Sector', sectorLabel(customer)],
+        ['Priority level', customer.priority_level ? displayLabel(customer.priority_level) : null],
+        ['Lead status', customer.lead_status ? displayLabel(customer.lead_status) : null],
         [customer.count_type === 'floor' ? 'Floor count' : 'Room count', customer.room_count],
         ['Strength', customer.strength],
         ['Branches', customer.branches],
@@ -1723,8 +2141,12 @@ function CustomerDetail({
       fields: [
         ['Details', customer.poc_name],
         ['Contact number', customer.contact_number],
+        ['Email address', customer.email],
         ['Alternative POC', customer.alternative_poc_name],
         ['Alternative POC contact', customer.alternative_poc_contact],
+        ['Main branch contact', customer.main_branch_contact_same_as_primary !== false
+          ? customer.contact_number
+          : customer.main_branch_contact],
         ['Beat name', customer.beat_name],
         ['Approached for', customer.approached_for],
         ['Current purchase', customer.current_purchase],
@@ -1736,6 +2158,7 @@ function CustomerDetail({
       fields: [
         ['Area', customer.area],
         ['City', customer.city],
+        ['Main branch location', customer.main_branch_location],
         ['Location / address', customer.location],
         ['Remarks', customer.remarks],
       ],
@@ -1745,15 +2168,49 @@ function CustomerDetail({
     <div className="detail-page">
       <button className="back-link" onClick={onBack}><Icon name="arrow" size={16} /> Back to customers</button>
       <div className="detail-hero">
-        <div className="detail-identity"><div className="detail-monogram">{customer.customer_name.slice(0, 1).toUpperCase()}</div><div><div className="eyebrow"><span /> CUSTOMER PROFILE</div><h1>{customer.customer_name}</h1><div className="detail-meta"><span className="sector-pill">{sectorLabel(customer)}</span><span>Added {formatDate(customer.created_at)}</span><span>S.No. {customer.serial_number}</span></div></div></div>
+        <div className="detail-identity"><div className="detail-monogram">{customer.customer_name.slice(0, 1).toUpperCase()}</div><div><div className="eyebrow"><span /> CUSTOMER PROFILE</div><h1>{customer.customer_name}</h1><div className="detail-meta"><span className="sector-pill">{sectorLabel(customer)}</span><span>Added {formatDate(customer.created_at)}</span></div></div></div>
         <div className="detail-actions">{readOnly
-          ? <span className="read-only-badge">Read-only report</span>
+          ? <span className="read-only-badge">Admin report</span>
           : <><button className="button button-outline" onClick={onEdit}><Icon name="edit" size={16} /> Edit</button><button className="button button-danger" onClick={onDelete}><Icon name="trash" size={16} /> Delete</button></>}</div>
       </div>
+      {(logoUrl || logoError) && (
+        <section className="client-logo-card" aria-label="Client logo">
+          {logoUrl ? <img src={logoUrl} alt={`${customer.customer_name} logo`} /> : <span role="alert">{logoError}</span>}
+        </section>
+      )}
       <div className="detail-sections">
         {sections.map((section) => (
           <section className="detail-card" key={section.title}><div className="detail-section-title"><h2>{section.title}</h2></div><div className="detail-fields">{section.fields.map(([label, value]) => <div className="detail-field" key={label}><span>{label}</span><strong>{value === null || value === '' ? <span className="muted-dash">Not provided</span> : String(value)}</strong></div>)}</div></section>
         ))}
+        {admin && (
+          <section className="detail-card">
+            <div className="detail-section-title"><h2>Admin assignment</h2></div>
+            <div className="detail-fields">
+              <label className="detail-field detail-field-control">
+                <span>Interested in</span>
+                <strong>
+                  <select
+                    className="text-input select-input"
+                    aria-label="Assign what this lead is interested in"
+                    value={customer.interested_in ?? ''}
+                    disabled={savingInterest || availableInterestOptions.length === 0}
+                    onChange={async (event) => {
+                      setSavingInterest(true)
+                      try {
+                        await onAssignInterest(event.target.value)
+                      } finally {
+                        setSavingInterest(false)
+                      }
+                    }}
+                  >
+                    <option value="">{availableInterestOptions.length ? 'Not assigned' : 'Add options in admin settings'}</option>
+                    {availableInterestOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </strong>
+              </label>
+            </div>
+          </section>
+        )}
       </div>
       <div className="detail-updated">{createdBy && <>Submitted by {createdBy} · </>}Last updated {formatDate(customer.updated_at)}</div>
     </div>

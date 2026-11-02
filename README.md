@@ -5,7 +5,7 @@ A mobile-first customer tracker for sales employees and read-only sales reportin
 ## Sign-in and roles
 
 - Employees sign in with an ID such as `vc001` and a password. They can create customer records and view, edit, or delete only records they submitted.
-- Administrators sign in with an ID such as `admin001` and a password. They can view and export all employee submissions; admin reports are read-only.
+- Administrators sign in with an ID such as `admin001` and a password. They can view and export all employee submissions and assign each lead's interest; other lead details remain read-only to admins.
 - Role access comes from `public.profiles` and Supabase Row Level Security. The ID prefix is not itself an authorization check.
 - The login page's **Create account** flow creates employee accounts only. Admin accounts must be provisioned by the project owner.
 - Employees can create their own accounts with a unique `vc` ID. Admin IDs and roles cannot be created through public sign-up.
@@ -14,7 +14,7 @@ A mobile-first customer tracker for sales employees and read-only sales reportin
 ## Supabase setup
 
 1. Install Node.js 20.19+ or 22.12+.
-2. For a new database, run [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor. It safely creates or updates the app tables, role helpers, triggers, and row-level policies without deleting existing customer records or profiles. For an existing installation, run [`supabase/customer-form-options.sql`](./supabase/customer-form-options.sql) to add the room/floor count selector, beat and approached-for fields, and admin-managed sales options. Existing beat numbers are migrated into beat names and options, then the legacy `beat_no` column is removed; customer records are preserved.
+2. For a new database, run [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor. For an existing database, run [`supabase/add-lead-fields-migration.sql`](./supabase/add-lead-fields-migration.sql) to add the lead email, main branch, priority, status, and admin-assigned interest fields, then run [`supabase/add-customer-logos-migration.sql`](./supabase/add-customer-logos-migration.sql) to enable private logo uploads. These migrations are safe to re-run and do not update or delete existing customer rows; new fields remain `NULL` for existing records. The logo migration creates a private Storage bucket with a 5 MB limit for PNG, JPEG, and WebP files, and sets access policies so employees can manage their own customers' logos and admins can view them. On supported mobile browsers, the **+ Logo** control opens the camera; on desktop it opens the image picker. Do not rerun the full schema just to add these fields. Older installations that still need the room/floor selector and beat/approached-for setup can also use [`supabase/customer-form-options.sql`](./supabase/customer-form-options.sql); that script migrates legacy beat values before removing the old column.
 3. Create the first administrator:
    1. In **Authentication → Users**, add a confirmed user with email `admin001@accounts.vedhas.local` and a secure password.
    2. Copy that auth user's UUID.
@@ -52,7 +52,7 @@ If you already have data from an earlier email-based deployment, do not create r
 
 ## Reports and navigation
 
-The app uses a single overview with the full customer/organisation list and an Add Customer button. Admins can manage the beat-name and approached-for dropdown choices from **Manage sales options** and export customer reports as CSV. Admin reports can be filtered by a custom inclusive date range using the submission date. Employees select either room count or floor count when entering customers.
+The app uses a single overview with the full customer/organisation list and an Add Customer button. Employees can record lead email, main branch details, priority, status, and an optional client logo. Admins can manage beat-name and approached-for choices and the **Interested in** assignment dropdown from **Manage sales options**. Admins assign lead interest from a lead's detail page and can view the private client logos. Reports can be filtered by a custom inclusive date range using the submission date; CSV exports omit the serial number and submission date but include the sales employee name. Employees select either room count or floor count when entering customers.
 
 ## Build
 
