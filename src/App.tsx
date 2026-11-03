@@ -594,7 +594,7 @@ export default function App() {
         customer.preferred_fragrance ?? '',
         customer.beat_name ?? '',
         customer.approached_for ?? '',
-        customer.interested_in ?? '',
+        customer.interested_in?.join('; ') ?? '',
         customer.priority_level ?? '',
         leadStatuses.find((status) => status.value === (customer.lead_status ?? 'new_lead'))?.label ?? 'New Lead',
         customer.area ?? '',
@@ -645,6 +645,7 @@ export default function App() {
         customer.alternative_poc_contact,
         customer.main_branch_contact,
         customer.preferred_fragrance,
+        customer.interested_in?.join(' '),
         customer.area,
         customer.city,
         customer.location,
@@ -948,7 +949,7 @@ export default function App() {
     }
   }
 
-  const assignCustomerInterest = async (interest: string) => {
+  const assignCustomerInterest = async (interest: string[]) => {
     if (!isAdmin || !supabase || !selected) {
       notify('Only an administrator can assign lead interest.', 'error')
       return
@@ -957,7 +958,7 @@ export default function App() {
     try {
       const { data, error } = await supabase
         .from('customers')
-        .update({ interested_in: interest || null })
+        .update({ interested_in: interest.length ? interest : null })
         .eq('id', selected.id)
         .select()
         .single()
@@ -975,6 +976,36 @@ export default function App() {
       notify('Lead interest updated.')
     } catch {
       notify('Lead interest could not be updated. Check your connection and try again.', 'error')
+    }
+  }
+
+  const updateCustomerLeadStatus = async (leadStatus: LeadStatus) => {
+    if (isAdmin || !supabase || !selected) {
+      notify('Only sales employees can update lead status.', 'error')
+      return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .update({ lead_status: leadStatus })
+        .eq('id', selected.id)
+        .select()
+        .single()
+
+      if (error || !data) {
+        notify('Lead status could not be updated. Check your connection and permissions, then try again.', 'error')
+        return
+      }
+
+      const updatedCustomer = data as Customer
+      setSelected(updatedCustomer)
+      setCustomers((current) => current.map((customer) =>
+        customer.id === updatedCustomer.id ? updatedCustomer : customer,
+      ))
+      notify('Lead status updated.')
+    } catch {
+      notify('Lead status could not be updated. Check your connection and try again.', 'error')
     }
   }
 
@@ -1153,6 +1184,7 @@ export default function App() {
                 .filter((option) => option.option_type === 'interested_in')
                 .map((option) => option.value)}
               onAssignInterest={assignCustomerInterest}
+              onUpdateLeadStatus={updateCustomerLeadStatus}
             />
           )}
           {page === 'settings' && isAdmin && (
@@ -1613,7 +1645,7 @@ function CustomerList({
                   <td><span className="sector-pill">{sectorLabel(customer)}</span></td>
                   <td><span className={`lead-status-badge lead-status-${customer.lead_status ?? 'new_lead'}`}>{leadStatuses.find((status) => status.value === (customer.lead_status ?? 'new_lead'))?.label ?? 'New Lead'}</span></td>
                   <td><span className={`priority-badge priority-${customer.priority_level ?? 'medium'}`}><i />{displayLabel(customer.priority_level ?? 'Medium')}</span></td>
-                  <td>{customer.interested_in || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.interested_in?.join(', ') || <span className="muted-dash">—</span>}</td>
                   <td>{customer.email || <span className="muted-dash">—</span>}</td>
                   <td>{customer.poc_name || <span className="muted-dash">—</span>}</td>
                   <td>{customer.poc_designation || <span className="muted-dash">—</span>}</td>
@@ -1647,7 +1679,7 @@ function CustomerList({
                 <div className="mobile-lead-tags">
                   <span className={`lead-status-badge lead-status-${customer.lead_status ?? 'new_lead'}`}>{leadStatuses.find((status) => status.value === (customer.lead_status ?? 'new_lead'))?.label ?? 'New Lead'}</span>
                   <span className={`priority-badge priority-${customer.priority_level ?? 'medium'}`}><i />{displayLabel(customer.priority_level ?? 'Medium')}</span>
-                  {customer.interested_in && <span className="mobile-interest">{customer.interested_in}</span>}
+                  {customer.interested_in?.length ? <span className="mobile-interest">{customer.interested_in.join(', ')}</span> : null}
                 </div>
               </button>
             ))}</div>
@@ -1829,7 +1861,7 @@ function CustomerForm({
           </div>
         </section>
         <section className="form-section">
-          <div className="form-section-heading"><span className="form-step">02</span><div><h2>Contact & lead qualification</h2><p>Who should your team speak with, and how should this lead be prioritized?</p></div></div>
+          <div className="form-section-heading"><span className="form-step">02</span><div><h2>Lead contact</h2><p>Who should your team speak with, and how should this lead be prioritized?</p></div></div>
           <div className="form-grid">
             <Field label="POC name" required><input required className="text-input" placeholder="Point of contact name" value={form.poc_name} onChange={(event) => setField('poc_name', event.target.value)} /></Field>
             <Field label="POC designation"><input className="text-input" placeholder="e.g. Manager, Purchase Head" value={form.poc_designation} onChange={(event) => setField('poc_designation', event.target.value)} /></Field>
@@ -2118,6 +2150,7 @@ function CustomerDetail({
   admin,
   interestOptions,
   onAssignInterest,
+  onUpdateLeadStatus,
   onBack,
   onEdit,
   onDelete,
@@ -2127,17 +2160,18 @@ function CustomerDetail({
   createdBy?: string
   admin: boolean
   interestOptions: string[]
-  onAssignInterest: (interest: string) => Promise<void>
+  onAssignInterest: (interest: string[]) => Promise<void>
+  onUpdateLeadStatus: (status: LeadStatus) => Promise<void>
   onBack: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
   const [savingInterest, setSavingInterest] = useState(false)
+  const [savingLeadStatus, setSavingLeadStatus] = useState(false)
   const [logoUrl, setLogoUrl] = useState('')
   const [logoError, setLogoError] = useState('')
-  const availableInterestOptions = customer.interested_in && !interestOptions.includes(customer.interested_in)
-    ? [...interestOptions, customer.interested_in]
-    : interestOptions
+  const selectedInterests = customer.interested_in ?? []
+  const availableInterestOptions = [...new Set([...interestOptions, ...selectedInterests])]
 
   useEffect(() => {
     let active = true
@@ -2174,14 +2208,13 @@ function CustomerDetail({
       fields: [
         ['Sector', sectorLabel(customer)],
         ['Priority level', customer.priority_level ? displayLabel(customer.priority_level) : null],
-        ['Lead status', customer.lead_status ? leadStatuses.find((status) => status.value === customer.lead_status)?.label ?? null : null],
         [customer.count_type === 'floor' ? 'Floor count' : 'Room count', customer.room_count],
         ['Strength', customer.strength],
         ['Branches', customer.branches],
       ],
     },
     {
-      title: 'Contact & lead qualification',
+      title: 'Lead contact',
       fields: [
         ['POC name', customer.poc_name],
         ['POC designation', customer.poc_designation],
@@ -2225,6 +2258,39 @@ function CustomerDetail({
         </section>
       )}
       <div className="detail-sections">
+        <section className="detail-card">
+          <div className="detail-section-title"><h2>Lead status</h2></div>
+          <div className="detail-fields">
+            {!readOnly ? (
+              <label className="detail-field detail-field-control">
+                <span>Current stage</span>
+                <strong>
+                  <select
+                    className="text-input select-input"
+                    aria-label="Update lead status"
+                    value={customer.lead_status ?? 'new_lead'}
+                    disabled={savingLeadStatus}
+                    onChange={async (event) => {
+                      setSavingLeadStatus(true)
+                      try {
+                        await onUpdateLeadStatus(event.target.value as LeadStatus)
+                      } finally {
+                        setSavingLeadStatus(false)
+                      }
+                    }}
+                  >
+                    {leadStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+                  </select>
+                </strong>
+              </label>
+            ) : (
+              <div className="detail-field">
+                <span>Current stage</span>
+                <strong>{customer.lead_status ? leadStatuses.find((status) => status.value === customer.lead_status)?.label ?? <span className="muted-dash">Not provided</span> : <span className="muted-dash">Not provided</span>}</strong>
+              </div>
+            )}
+          </div>
+        </section>
         {sections.map((section) => (
           <section className="detail-card" key={section.title}><div className="detail-section-title"><h2>{section.title}</h2></div><div className="detail-fields">{section.fields.map(([label, value]) => <div className="detail-field" key={label}><span>{label}</span><strong>{value === null || value === '' ? <span className="muted-dash">Not provided</span> : String(value)}</strong></div>)}</div></section>
         ))}
@@ -2232,28 +2298,34 @@ function CustomerDetail({
           <section className="detail-card">
             <div className="detail-section-title"><h2>Admin assignment</h2></div>
             <div className="detail-fields">
-              <label className="detail-field detail-field-control">
+              <div className="detail-field detail-field-control">
                 <span>Interested in</span>
-                <strong>
-                  <select
-                    className="text-input select-input"
-                    aria-label="Assign what this lead is interested in"
-                    value={customer.interested_in ?? ''}
-                    disabled={savingInterest || availableInterestOptions.length === 0}
-                    onChange={async (event) => {
-                      setSavingInterest(true)
-                      try {
-                        await onAssignInterest(event.target.value)
-                      } finally {
-                        setSavingInterest(false)
-                      }
-                    }}
-                  >
-                    <option value="">{availableInterestOptions.length ? 'Not assigned' : 'Add options in admin settings'}</option>
-                    {availableInterestOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </select>
-                </strong>
-              </label>
+                <span className="interest-option-list" aria-label="Select one or more interests">
+                  {availableInterestOptions.length === 0
+                    ? <span className="field-hint">Add options in admin settings.</span>
+                    : availableInterestOptions.map((option) => (
+                      <label key={option} className={`interest-option${selectedInterests.includes(option) ? ' interest-option-selected' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedInterests.includes(option)}
+                          disabled={savingInterest}
+                          onChange={async (event) => {
+                            const nextInterests = event.target.checked
+                              ? [...selectedInterests, option]
+                              : selectedInterests.filter((interest) => interest !== option)
+                            setSavingInterest(true)
+                            try {
+                              await onAssignInterest(nextInterests)
+                            } finally {
+                              setSavingInterest(false)
+                            }
+                          }}
+                        />
+                        <span>{option}</span>
+                      </label>
+                    ))}
+                </span>
+              </div>
             </div>
           </section>
         )}

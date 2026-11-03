@@ -9,11 +9,31 @@ alter table public.customers
   add column if not exists main_branch_location text,
   add column if not exists main_branch_contact text,
   add column if not exists main_branch_contact_same_as_primary boolean not null default true,
-  add column if not exists interested_in text,
+  add column if not exists interested_in text[],
   add column if not exists priority_level text not null default 'medium',
   add column if not exists lead_status text not null default 'new',
   add column if not exists count_type text not null default 'room'
     check (count_type in ('room', 'floor'));
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'customers'
+      and column_name = 'interested_in'
+      and data_type <> 'ARRAY'
+  ) then
+    alter table public.customers
+      alter column interested_in type text[]
+      using case
+        when nullif(trim(interested_in), '') is null then null
+        else array[interested_in]
+      end;
+  end if;
+end;
+$$;
 
 alter table public.customers
   drop constraint if exists customers_main_branch_contact_consistency,

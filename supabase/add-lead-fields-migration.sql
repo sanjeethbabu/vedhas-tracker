@@ -1,6 +1,5 @@
 -- Run in the Supabase SQL Editor after the existing tracker schema is installed.
--- Safe to re-run: this only adds/adjusts nullable columns and permissions.
--- Existing customer rows are not updated, deleted, or replaced.
+-- Safe to re-run: this adds/adjusts columns and permissions without deleting customer rows.
 begin;
 
 alter table public.customers
@@ -10,7 +9,7 @@ alter table public.customers
   add column if not exists main_branch_contact text,
   add column if not exists main_branch_contact_same_as_primary boolean,
   add column if not exists preferred_fragrance text,
-  add column if not exists interested_in text,
+  add column if not exists interested_in text[],
   add column if not exists priority_level text,
   add column if not exists lead_status text;
 
@@ -29,6 +28,26 @@ alter table public.customers
   alter column priority_level drop default,
   alter column lead_status drop not null,
   alter column lead_status drop default;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'customers'
+      and column_name = 'interested_in'
+      and data_type <> 'ARRAY'
+  ) then
+    alter table public.customers
+      alter column interested_in type text[]
+      using case
+        when nullif(trim(interested_in), '') is null then null
+        else array[interested_in]
+      end;
+  end if;
+end;
+$$;
 
 alter table public.customers
   drop constraint if exists customers_lead_status_check;

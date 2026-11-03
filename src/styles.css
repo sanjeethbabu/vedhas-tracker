@@ -405,6 +405,10 @@ button.customer-logo-thumbnail:focus-visible { outline: 3px solid #6584ed35; out
 .detail-field > strong .muted-dash { font-size: 9px; }
 .detail-field-control > strong { flex: 1; }
 .detail-field-control .text-input { width: 100%; min-height: 35px; font-size: 10px; }
+.interest-option-list { display: flex; flex: 1; flex-wrap: wrap; gap: 7px; }
+.interest-option { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e5eaf2; border-radius: 6px; padding: 7px 9px; color: #52637b; background: #fff; font-size: 11px; font-weight: 500; cursor: pointer; }
+.interest-option-selected { border-color: #b9c8f5; color: #3159d9; background: #f3f6ff; }
+.interest-option input { margin: 0; accent-color: #3159d9; }
 .detail-updated { margin-top: 13px; color: #a0aaba; text-align: right; font-size: 9px; }
 
 .toast { position: fixed; z-index: 60; right: 25px; bottom: 24px; display: flex; align-items: center; gap: 10px; max-width: min(420px, calc(100vw - 36px)); border: 1px solid #ddece7; border-radius: 8px; padding: 11px 15px 11px 11px; color: #315a4f; background: #fff; box-shadow: 0 9px 28px #20334b1c; font-size: 11px; animation: toast-in .2s ease-out; }

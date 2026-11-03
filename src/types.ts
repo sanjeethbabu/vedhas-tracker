@@ -49,7 +49,7 @@ export interface Customer {
   preferred_fragrance: string | null
   beat_name: string | null
   approached_for: string | null
-  interested_in: string | null
+  interested_in: string[] | null
   priority_level: PriorityLevel | null
   lead_status: LeadStatus | null
   area: string | null
