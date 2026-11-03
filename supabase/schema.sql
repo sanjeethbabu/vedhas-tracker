@@ -126,6 +126,7 @@ create table if not exists public.customers (
   ),
   other_sector text,
   poc_name text,
+  poc_designation text,
   contact_number text,
   email text,
   alternative_poc_name text,
@@ -133,6 +134,7 @@ create table if not exists public.customers (
   main_branch_location text,
   main_branch_contact text,
   main_branch_contact_same_as_primary boolean not null default true,
+  preferred_fragrance text,
   beat_name text,
   approached_for text,
   interested_in text,
@@ -168,17 +170,19 @@ create table if not exists public.customers (
     priority_level in ('low', 'medium', 'high')
   ),
   constraint customers_lead_status_check check (
-    lead_status in ('new', 'hot', 'warm', 'cold', 'converted', 'lost')
+    lead_status in ('new_lead', 'contacted', 'qualified', 'proposed', 'closed')
   )
 );
 
 alter table public.customers
+  add column if not exists poc_designation text,
   add column if not exists alternative_poc_name text,
   add column if not exists alternative_poc_contact text,
   add column if not exists email text,
   add column if not exists main_branch_location text,
   add column if not exists main_branch_contact text,
   add column if not exists main_branch_contact_same_as_primary boolean not null default true,
+  add column if not exists preferred_fragrance text,
   add column if not exists beat_name text,
   add column if not exists approached_for text,
   add column if not exists interested_in text,
@@ -193,6 +197,18 @@ alter table public.customers
   drop constraint if exists customers_priority_level_check,
   drop constraint if exists customers_lead_status_check;
 
+update public.customers
+set lead_status = case lead_status
+  when 'new' then 'new_lead'
+  when 'hot' then 'contacted'
+  when 'warm' then 'contacted'
+  when 'cold' then 'contacted'
+  when 'converted' then 'closed'
+  when 'lost' then 'closed'
+  else lead_status
+end
+where lead_status in ('new', 'hot', 'warm', 'cold', 'converted', 'lost');
+
 alter table public.customers
   add constraint customers_main_branch_contact_consistency check (
     (main_branch_contact_same_as_primary and main_branch_contact is null)
@@ -205,7 +221,7 @@ alter table public.customers
     priority_level in ('low', 'medium', 'high')
   ),
   add constraint customers_lead_status_check check (
-    lead_status in ('new', 'hot', 'warm', 'cold', 'converted', 'lost')
+    lead_status in ('new_lead', 'contacted', 'qualified', 'proposed', 'closed')
   );
 
 do $$

@@ -20,6 +20,18 @@ alter table public.customers
   drop constraint if exists customers_priority_level_check,
   drop constraint if exists customers_lead_status_check;
 
+update public.customers
+set lead_status = case lead_status
+  when 'new' then 'new_lead'
+  when 'hot' then 'contacted'
+  when 'warm' then 'contacted'
+  when 'cold' then 'contacted'
+  when 'converted' then 'closed'
+  when 'lost' then 'closed'
+  else lead_status
+end
+where lead_status in ('new', 'hot', 'warm', 'cold', 'converted', 'lost');
+
 alter table public.customers
   add constraint customers_main_branch_contact_consistency check (
     (main_branch_contact_same_as_primary and main_branch_contact is null)
@@ -32,7 +44,7 @@ alter table public.customers
     priority_level in ('low', 'medium', 'high')
   ),
   add constraint customers_lead_status_check check (
-    lead_status in ('new', 'hot', 'warm', 'cold', 'converted', 'lost')
+    lead_status in ('new_lead', 'contacted', 'qualified', 'proposed', 'closed')
   );
 
 do $$

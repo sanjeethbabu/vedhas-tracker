@@ -15,7 +15,14 @@ export const sectors = [
 export type Sector = (typeof sectors)[number]
 export type CountType = 'room' | 'floor'
 export type PriorityLevel = 'low' | 'medium' | 'high'
-export type LeadStatus = 'new' | 'hot' | 'warm' | 'cold' | 'converted' | 'lost'
+export const leadStatuses = [
+  { value: 'new_lead', label: 'New Lead' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'proposed', label: 'Proposed' },
+  { value: 'closed', label: 'Closed' },
+] as const
+export type LeadStatus = (typeof leadStatuses)[number]['value']
 
 export interface SalesOption {
   id: string
@@ -31,6 +38,7 @@ export interface Customer {
   sector: Sector
   other_sector: string | null
   poc_name: string | null
+  poc_designation: string | null
   contact_number: string | null
   email: string | null
   alternative_poc_name: string | null
@@ -38,6 +46,7 @@ export interface Customer {
   main_branch_location: string | null
   main_branch_contact: string | null
   main_branch_contact_same_as_primary: boolean | null
+  preferred_fragrance: string | null
   beat_name: string | null
   approached_for: string | null
   interested_in: string | null

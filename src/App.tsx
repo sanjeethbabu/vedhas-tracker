@@ -3,13 +3,14 @@ import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, setRememberSession, supabase } from './supabase'
 import type { CountType, Customer, CustomerFormValues, LeadStatus, Page, PriorityLevel, SalesOption, Sector, UserProfile } from './types'
-import { sectors } from './types'
+import { leadStatuses, sectors } from './types'
 
 type FormState = {
   customer_name: string
   sector: Sector | ''
   other_sector: string
   poc_name: string
+  poc_designation: string
   contact_number: string
   email: string
   alternative_poc_name: string
@@ -17,6 +18,7 @@ type FormState = {
   main_branch_location: string
   main_branch_contact: string
   main_branch_contact_same_as_primary: boolean
+  preferred_fragrance: string
   beat_name: string
   approached_for: string
   priority_level: PriorityLevel
@@ -40,6 +42,7 @@ const emptyForm: FormState = {
   sector: '',
   other_sector: '',
   poc_name: '',
+  poc_designation: '',
   contact_number: '',
   email: '',
   alternative_poc_name: '',
@@ -47,10 +50,11 @@ const emptyForm: FormState = {
   main_branch_location: '',
   main_branch_contact: '',
   main_branch_contact_same_as_primary: true,
+  preferred_fragrance: '',
   beat_name: '',
   approached_for: '',
   priority_level: 'medium',
-  lead_status: 'new',
+  lead_status: 'new_lead',
   area: '',
   city: '',
   location: '',
@@ -170,6 +174,7 @@ function customerToForm(customer: Customer): FormState {
     sector: customer.sector,
     other_sector: customer.other_sector ?? '',
     poc_name: customer.poc_name ?? '',
+    poc_designation: customer.poc_designation ?? '',
     contact_number: customer.contact_number ?? '',
     email: customer.email ?? '',
     alternative_poc_name: customer.alternative_poc_name ?? '',
@@ -177,10 +182,11 @@ function customerToForm(customer: Customer): FormState {
     main_branch_location: customer.main_branch_location ?? '',
     main_branch_contact: customer.main_branch_contact ?? '',
     main_branch_contact_same_as_primary: customer.main_branch_contact_same_as_primary ?? true,
+    preferred_fragrance: customer.preferred_fragrance ?? '',
     beat_name: customer.beat_name ?? '',
     approached_for: customer.approached_for ?? '',
     priority_level: customer.priority_level ?? 'medium',
-    lead_status: customer.lead_status ?? 'new',
+    lead_status: customer.lead_status ?? 'new_lead',
     area: customer.area ?? '',
     city: customer.city ?? '',
     location: customer.location ?? '',
@@ -203,6 +209,7 @@ function formToCustomer(values: FormState): CustomerFormValues {
     sector: values.sector as Sector,
     other_sector: values.sector === 'Others' ? values.other_sector.trim() : null,
     poc_name: values.poc_name.trim() || null,
+    poc_designation: values.poc_designation.trim() || null,
     contact_number: values.contact_number.trim() || null,
     email: values.email.trim() || null,
     alternative_poc_name: values.alternative_poc_name.trim() || null,
@@ -212,6 +219,7 @@ function formToCustomer(values: FormState): CustomerFormValues {
       ? null
       : values.main_branch_contact.trim() || null,
     main_branch_contact_same_as_primary: values.main_branch_contact_same_as_primary,
+    preferred_fragrance: values.preferred_fragrance.trim() || null,
     beat_name: values.beat_name.trim() || null,
     approached_for: values.approached_for.trim() || null,
     priority_level: values.priority_level,
@@ -542,18 +550,20 @@ export default function App() {
       'Customer Name',
       'Sales Employee',
       'Sector',
-      'Details',
+      'POC Name',
+      'POC Designation',
       'Contact Number',
       'Email',
       'Alternative POC',
       'Alternative POC Contact',
       'Main Branch Location',
       'Main Branch Contact',
+      'Preferred Fragrance',
       'Beat Name',
       'Approached For',
       'Interested In',
       'Priority',
-      'Lead Status',
+      'Status',
       'Area',
       'City',
       'Location',
@@ -572,6 +582,7 @@ export default function App() {
         staffNames.get(customer.user_id) ?? '',
         sectorLabel(customer),
         customer.poc_name ?? '',
+        customer.poc_designation ?? '',
         customer.contact_number ?? '',
         customer.email ?? '',
         customer.alternative_poc_name ?? '',
@@ -580,11 +591,12 @@ export default function App() {
         customer.main_branch_contact_same_as_primary !== false
           ? customer.contact_number ?? ''
           : customer.main_branch_contact ?? '',
+        customer.preferred_fragrance ?? '',
         customer.beat_name ?? '',
         customer.approached_for ?? '',
         customer.interested_in ?? '',
         customer.priority_level ?? '',
-        customer.lead_status ?? '',
+        leadStatuses.find((status) => status.value === (customer.lead_status ?? 'new_lead'))?.label ?? 'New Lead',
         customer.area ?? '',
         customer.city ?? '',
         customer.location ?? '',
@@ -626,11 +638,13 @@ export default function App() {
       const searchable = [
         customer.customer_name,
         customer.poc_name,
+        customer.poc_designation,
         customer.contact_number,
         customer.email,
         customer.alternative_poc_name,
         customer.alternative_poc_contact,
         customer.main_branch_contact,
+        customer.preferred_fragrance,
         customer.area,
         customer.city,
         customer.location,
@@ -664,6 +678,10 @@ export default function App() {
       others: customers.filter(
         (customer) => !['Hotels & Residency', 'Hospitals', 'Schools', 'Colleges'].includes(customer.sector),
       ).length,
+      leadStatuses: customers.reduce<Record<LeadStatus, number>>((counts, customer) => {
+        counts[customer.lead_status ?? 'new_lead'] += 1
+        return counts
+      }, { new_lead: 0, contacted: 0, qualified: 0, proposed: 0, closed: 0 }),
     }),
     [customers],
   )
@@ -1372,7 +1390,15 @@ function Dashboard({
   customers: Customer[]
   customerLogoUrls: Record<string, string>
   employees: UserProfile[]
-  stats: { total: number; hotels: number; hospitals: number; schools: number; colleges: number; others: number }
+  stats: {
+    total: number
+    hotels: number
+    hospitals: number
+    schools: number
+    colleges: number
+    others: number
+    leadStatuses: Record<LeadStatus, number>
+  }
   loading: boolean
   onAdd: () => void
   onCustomers: () => void
@@ -1423,6 +1449,20 @@ function Dashboard({
             <div className="stat-note"><span className={`stat-indicator stat-indicator-${metric.tone}`} />{metric.note}</div>
           </div>
         ))}
+      </section>
+      <section className="lead-pipeline-section" aria-label="Leads by status">
+        <div className="section-title-row">
+          <div><div className="eyebrow"><span /> LEAD PIPELINE</div><h2>Leads by status</h2></div>
+        </div>
+        <div className="lead-pipeline-grid">
+          {leadStatuses.map((status) => (
+            <div key={status.value} className={`lead-pipeline-card lead-pipeline-${status.value}`}>
+              <span>{status.label}</span>
+              <strong>{loading ? <span className="skeleton-number" /> : stats.leadStatuses[status.value]}</strong>
+              <small>{stats.leadStatuses[status.value] === 1 ? 'lead' : 'leads'}</small>
+            </div>
+          ))}
+        </div>
       </section>
       {admin && <section className="employee-summary recent-section">
         <div className="section-title-row">
@@ -1565,22 +1605,24 @@ function CustomerList({
         ) : (
           <>
             <div className="table-scroll"><table className="customer-table">
-              <thead><tr><th>CUSTOMER NAME</th>{admin && <th>SALES EMPLOYEE</th>}<th>SECTOR</th><th>LEAD STATUS</th><th>PRIORITY</th><th>INTERESTED IN</th><th>EMAIL</th><th>DETAILS</th><th>CONTACT NUMBER</th><th>MAIN BRANCH LOCATION</th><th>MAIN BRANCH CONTACT</th><th>ALTERNATIVE POC</th><th>ALTERNATIVE POC CONTACT</th><th>BEAT NAME</th><th>APPROACHED FOR</th><th>AREA</th><th>CITY</th><th>LOCATION</th><th>ROOM / FLOOR COUNT</th><th>STRENGTH</th><th>BRANCHES</th><th>LITRES / MONTH</th><th>CURRENT PURCHASE</th><th>REMARKS</th><th aria-label="Open" /></tr></thead>
+              <thead><tr><th>CUSTOMER NAME</th>{admin && <th>SALES EMPLOYEE</th>}<th>SECTOR</th><th>LEAD STATUS</th><th>PRIORITY</th><th>INTERESTED IN</th><th>EMAIL</th><th>POC NAME</th><th>POC DESIGNATION</th><th>CONTACT NUMBER</th><th>MAIN BRANCH LOCATION</th><th>MAIN BRANCH CONTACT</th><th>PREFERRED FRAGRANCE</th><th>ALTERNATIVE POC</th><th>ALTERNATIVE POC CONTACT</th><th>BEAT NAME</th><th>APPROACHED FOR</th><th>AREA</th><th>CITY</th><th>LOCATION</th><th>ROOM / FLOOR COUNT</th><th>STRENGTH</th><th>BRANCHES</th><th>LITRES / MONTH</th><th>CURRENT PURCHASE</th><th>REMARKS</th><th aria-label="Open" /></tr></thead>
               <tbody>{customers.map((customer) => (
                 <tr key={customer.id} onClick={() => onOpenCustomer(customer)}>
                   <td><div className="table-customer-identity"><CustomerLogoThumbnail customer={customer} logoUrl={customer.logo_path ? customerLogoUrls[customer.logo_path] : undefined} onPreview={onPreviewLogo} /><strong className="table-customer-name">{customer.customer_name}</strong></div></td>
                   {admin && <td>{staffNames.get(customer.user_id) ?? 'Employee'}</td>}
                   <td><span className="sector-pill">{sectorLabel(customer)}</span></td>
-                  <td><span className={`lead-status-badge lead-status-${customer.lead_status ?? 'new'}`}>{displayLabel(customer.lead_status ?? 'New')}</span></td>
+                  <td><span className={`lead-status-badge lead-status-${customer.lead_status ?? 'new_lead'}`}>{leadStatuses.find((status) => status.value === (customer.lead_status ?? 'new_lead'))?.label ?? 'New Lead'}</span></td>
                   <td><span className={`priority-badge priority-${customer.priority_level ?? 'medium'}`}><i />{displayLabel(customer.priority_level ?? 'Medium')}</span></td>
                   <td>{customer.interested_in || <span className="muted-dash">—</span>}</td>
                   <td>{customer.email || <span className="muted-dash">—</span>}</td>
                   <td>{customer.poc_name || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.poc_designation || <span className="muted-dash">—</span>}</td>
                   <td>{customer.contact_number || <span className="muted-dash">—</span>}</td>
                   <td className="table-truncate" title={customer.main_branch_location ?? ''}>{customer.main_branch_location || <span className="muted-dash">—</span>}</td>
                   <td>{customer.main_branch_contact_same_as_primary !== false
                     ? customer.contact_number || <span className="muted-dash">—</span>
                     : customer.main_branch_contact || <span className="muted-dash">—</span>}</td>
+                  <td>{customer.preferred_fragrance || <span className="muted-dash">—</span>}</td>
                   <td>{customer.alternative_poc_name || <span className="muted-dash">—</span>}</td>
                   <td>{customer.alternative_poc_contact || <span className="muted-dash">—</span>}</td>
                   <td>{customer.beat_name || <span className="muted-dash">—</span>}</td>
@@ -1603,7 +1645,7 @@ function CustomerList({
                 <div className="mobile-customer-top"><CustomerLogoThumbnail customer={customer} logoUrl={customer.logo_path ? customerLogoUrls[customer.logo_path] : undefined} onPreview={onPreviewLogo} /><div className="mobile-customer-main"><strong>{customer.customer_name}</strong><span>{sectorLabel(customer)}</span></div><Icon name="chevron" size={17} /></div>
                 <div className="mobile-customer-meta"><span>{admin ? (staffNames.get(customer.user_id) ?? 'Employee') : (customer.poc_name || 'No contact')}</span><span>{[customer.city, customer.area].filter(Boolean).join(' · ') || 'Location not added'}</span></div>
                 <div className="mobile-lead-tags">
-                  <span className={`lead-status-badge lead-status-${customer.lead_status ?? 'new'}`}>{displayLabel(customer.lead_status ?? 'New')}</span>
+                  <span className={`lead-status-badge lead-status-${customer.lead_status ?? 'new_lead'}`}>{leadStatuses.find((status) => status.value === (customer.lead_status ?? 'new_lead'))?.label ?? 'New Lead'}</span>
                   <span className={`priority-badge priority-${customer.priority_level ?? 'medium'}`}><i />{displayLabel(customer.priority_level ?? 'Medium')}</span>
                   {customer.interested_in && <span className="mobile-interest">{customer.interested_in}</span>}
                 </div>
@@ -1789,7 +1831,8 @@ function CustomerForm({
         <section className="form-section">
           <div className="form-section-heading"><span className="form-step">02</span><div><h2>Contact & lead qualification</h2><p>Who should your team speak with, and how should this lead be prioritized?</p></div></div>
           <div className="form-grid">
-            <Field label="Details" required><input required className="text-input" placeholder="Point of contact name" value={form.poc_name} onChange={(event) => setField('poc_name', event.target.value)} /></Field>
+            <Field label="POC name" required><input required className="text-input" placeholder="Point of contact name" value={form.poc_name} onChange={(event) => setField('poc_name', event.target.value)} /></Field>
+            <Field label="POC designation"><input className="text-input" placeholder="e.g. Manager, Purchase Head" value={form.poc_designation} onChange={(event) => setField('poc_designation', event.target.value)} /></Field>
             <Field label="Contact number" required><input required className="text-input" type="tel" inputMode="tel" placeholder="Include area code if needed" value={form.contact_number} onChange={(event) => setField('contact_number', event.target.value)} /></Field>
             <Field label="Email address"><input className="text-input" type="email" placeholder="name@example.com" value={form.email} onChange={(event) => setField('email', event.target.value)} /></Field>
             <Field label="Alternative POC"><input className="text-input" placeholder="Alternative contact person's name" value={form.alternative_poc_name} onChange={(event) => setField('alternative_poc_name', event.target.value)} /></Field>
@@ -1798,10 +1841,11 @@ function CustomerForm({
               <span className="same-contact-toggle"><input type="checkbox" checked={form.main_branch_contact_same_as_primary} onChange={(event) => onChange({ ...form, main_branch_contact_same_as_primary: event.target.checked })} /> Same as primary contact number</span>
               <input className="text-input" type="tel" inputMode="tel" placeholder="Main branch contact number" value={form.main_branch_contact_same_as_primary ? form.contact_number : form.main_branch_contact} onChange={(event) => setField('main_branch_contact', event.target.value)} disabled={form.main_branch_contact_same_as_primary} required={!form.main_branch_contact_same_as_primary} />
             </Field>
+            <Field label="Preferred fragrance"><input className="text-input" placeholder="Preferred fragrance" value={form.preferred_fragrance} onChange={(event) => setField('preferred_fragrance', event.target.value)} /></Field>
             <Field label="Beat name" required><select required className="text-input select-input" value={form.beat_name} onChange={(event) => setField('beat_name', event.target.value)} disabled={salesOptionsLoading || Boolean(salesOptionsError)}><option value="">{salesOptionsLoading ? 'Loading beat names…' : 'Select a beat name'}</option>{optionValues('beat_name', form.beat_name).map((value) => <option key={value} value={value}>{value}</option>)}</select></Field>
             <Field label="Approached for" required><select required className="text-input select-input" value={form.approached_for} onChange={(event) => setField('approached_for', event.target.value)} disabled={salesOptionsLoading || Boolean(salesOptionsError)}><option value="">{salesOptionsLoading ? 'Loading options…' : 'Select an option'}</option>{optionValues('approached_for', form.approached_for).map((value) => <option key={value} value={value}>{value}</option>)}</select></Field>
             <Field label="Priority level" required><select required className="text-input select-input" value={form.priority_level} onChange={(event) => setField('priority_level', event.target.value as PriorityLevel)}><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></Field>
-            <Field label="Lead status" required><select required className="text-input select-input" value={form.lead_status} onChange={(event) => setField('lead_status', event.target.value as LeadStatus)}><option value="new">New</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option><option value="converted">Converted</option><option value="lost">Lost</option></select></Field>
+            <Field label="Lead status" required><select required className="text-input select-input" value={form.lead_status} onChange={(event) => setField('lead_status', event.target.value as LeadStatus)}>{leadStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
             <Field label="Current purchase" required><input required className="text-input" placeholder="e.g. Local supplier, Own plant" value={form.current_purchase} onChange={(event) => setField('current_purchase', event.target.value)} /></Field>
             <Field label="Required litres per month" required><div className="input-suffix"><input required className="text-input" type="number" min="0" step="any" placeholder="e.g. 1250.5" value={form.required_litres_per_month} onChange={(event) => setField('required_litres_per_month', event.target.value)} /><span>litres</span></div></Field>
           </div>
@@ -1830,15 +1874,15 @@ function CustomerForm({
           </div>
         </section>
         <section className="form-section">
-          <div className="form-section-heading"><span className="form-step">04</span><div><h2>Client logo</h2><p>Take a clear photo of the client logo or choose an image.</p></div></div>
+          <div className="form-section-heading"><span className="form-step">04</span><div><h2>Client logo / photo</h2><p>Take a clear photo of the client logo or choose an image.</p></div></div>
           <div className="logo-uploader">
             <div className={`logo-preview ${logoPreviewUrl ? 'logo-preview-filled' : ''}`}>
               {logoPreviewUrl
-                ? <img src={logoPreviewUrl} alt="Client logo preview" />
+                ? <img src={logoPreviewUrl} alt="Client logo or photo preview" />
                 : <span className="logo-preview-placeholder"><Icon name="building" size={27} /></span>}
             </div>
             <div className="logo-upload-copy">
-              <strong>{logoFile ? 'Logo ready to save' : existingLogoPath ? 'Client logo saved' : 'Add a client logo'}</strong>
+              <strong>{logoFile ? 'Logo/photo ready to save' : existingLogoPath ? 'Client logo/photo saved' : 'Add a client logo/photo'}</strong>
               <span>{logoFile ? logoFile.name : 'PNG, JPEG or WebP · up to 5 MB'}</span>
               <div className="logo-upload-actions">
                 <input
@@ -1847,7 +1891,7 @@ function CustomerForm({
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   capture="environment"
-                  aria-label="Take a photo of the client logo"
+                  aria-label="Take a logo or client photo"
                   onChange={handleLogoFileChange}
                 />
                 <input
@@ -1855,7 +1899,7 @@ function CustomerForm({
                   className="logo-file-input"
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
-                  aria-label="Choose a client logo from this device"
+                  aria-label="Choose a logo or client photo from this device"
                   onChange={handleLogoFileChange}
                 />
                 <button className="logo-add-button" type="button" onClick={() => logoCameraInputRef.current?.click()}>
@@ -2130,16 +2174,17 @@ function CustomerDetail({
       fields: [
         ['Sector', sectorLabel(customer)],
         ['Priority level', customer.priority_level ? displayLabel(customer.priority_level) : null],
-        ['Lead status', customer.lead_status ? displayLabel(customer.lead_status) : null],
+        ['Lead status', customer.lead_status ? leadStatuses.find((status) => status.value === customer.lead_status)?.label ?? null : null],
         [customer.count_type === 'floor' ? 'Floor count' : 'Room count', customer.room_count],
         ['Strength', customer.strength],
         ['Branches', customer.branches],
       ],
     },
     {
-      title: 'Details',
+      title: 'Contact & lead qualification',
       fields: [
-        ['Details', customer.poc_name],
+        ['POC name', customer.poc_name],
+        ['POC designation', customer.poc_designation],
         ['Contact number', customer.contact_number],
         ['Email address', customer.email],
         ['Alternative POC', customer.alternative_poc_name],
@@ -2147,6 +2192,7 @@ function CustomerDetail({
         ['Main branch contact', customer.main_branch_contact_same_as_primary !== false
           ? customer.contact_number
           : customer.main_branch_contact],
+        ['Preferred fragrance', customer.preferred_fragrance],
         ['Beat name', customer.beat_name],
         ['Approached for', customer.approached_for],
         ['Current purchase', customer.current_purchase],

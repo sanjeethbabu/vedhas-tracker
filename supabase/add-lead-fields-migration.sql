@@ -4,10 +4,12 @@
 begin;
 
 alter table public.customers
+  add column if not exists poc_designation text,
   add column if not exists email text,
   add column if not exists main_branch_location text,
   add column if not exists main_branch_contact text,
   add column if not exists main_branch_contact_same_as_primary boolean,
+  add column if not exists preferred_fragrance text,
   add column if not exists interested_in text,
   add column if not exists priority_level text,
   add column if not exists lead_status text;
@@ -27,6 +29,25 @@ alter table public.customers
   alter column priority_level drop default,
   alter column lead_status drop not null,
   alter column lead_status drop default;
+
+alter table public.customers
+  drop constraint if exists customers_lead_status_check;
+
+update public.customers
+set lead_status = case lead_status
+  when 'new' then 'new_lead'
+  when 'hot' then 'contacted'
+  when 'warm' then 'contacted'
+  when 'cold' then 'contacted'
+  when 'converted' then 'closed'
+  when 'lost' then 'closed'
+  else lead_status
+end
+where lead_status in ('new', 'hot', 'warm', 'cold', 'converted', 'lost');
+
+alter table public.customers
+  add constraint customers_lead_status_check
+    check (lead_status in ('new_lead', 'contacted', 'qualified', 'proposed', 'closed'));
 
 alter table public.sales_options
   drop constraint if exists sales_options_option_type_check;
